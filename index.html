@@ -4,66 +4,99 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Rangmanch AR — Ek Camera, Poori Cartoon Film</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,900&family=Space+Grotesk:wght@400;500;700&family=Caveat:wght@600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header>
-  <div class="title-block">
-    <h1>🎭 Rangmanch <span class="ar">AR</span></h1>
-    <p class="tagline">Act karo, animate mat karo — your body is the cartoon. One person, every character, live in your room.</p>
-  </div>
-  <div class="status-block">
-    <div class="pill" id="status-model">Models: loading…</div>
-    <div class="trackers">
-      <span class="dot" id="dot-pose"></span> Body
-      <span class="dot" id="dot-hand"></span> Hands
-      <span class="dot" id="dot-face"></span> Face
-      <span class="fps" id="fps"></span>
+
+<header class="marquee">
+  <div class="bulbs" aria-hidden="true"></div>
+  <div class="marquee-inner">
+    <div class="title-block">
+      <div class="kicker">Swapnil Agrawal presents</div>
+      <h1>RANGMANCH <span class="ar">AR</span></h1>
+      <p class="tagline">Act karo, animate mat karo. Your body is the cartoon — one person, every character, live on your own stage.</p>
+      <p class="hand-note">ek camera, poori film company ✦</p>
+    </div>
+    <div class="status-block">
+      <div class="ticket" id="status-model">Models: loading…</div>
+      <div class="trackers">
+        <span class="t-item"><span class="dot" id="dot-pose"></span>Body</span>
+        <span class="t-item"><span class="dot" id="dot-hand"></span>Hands</span>
+        <span class="t-item"><span class="dot" id="dot-face"></span>Face</span>
+        <span class="fps" id="fps"></span>
+      </div>
     </div>
   </div>
+  <div class="bulbs" aria-hidden="true"></div>
 </header>
 
 <main>
-  <section class="stage-wrap">
+  <section class="stage-frame">
+    <div class="curtain-top" aria-hidden="true"></div>
+    <div class="curtain-side left" aria-hidden="true"></div>
+    <div class="curtain-side right" aria-hidden="true"></div>
     <canvas id="stage" width="1280" height="720"></canvas>
     <video id="cam" playsinline muted hidden></video>
-    <div class="stage-msg" id="stage-msg">Pick a cast, then start the camera — ya Demo Mode dabao bina camera ke dekhne ke liye.</div>
+    <div class="stage-msg" id="stage-msg">Cast chunno, camera chalao — ya bina camera ke Demo Mode dabao.</div>
+    <div class="stage-board" aria-hidden="true">★ Aaj ka show: Tum, aur tumhare saare characters ★</div>
   </section>
 
-  <section class="controls">
-    <div class="row">
-      <button id="btn-camera" class="primary">📷 Start Camera</button>
-      <button id="btn-demo">🪄 Demo Mode</button>
-      <button id="btn-record" disabled>⏺ Record Scene</button>
-      <a id="download" class="download" hidden>⬇ Download film</a>
-    </div>
-    <div class="row cast">
-      <label>🧍 Body cast
-        <select id="cast-body"></select>
-      </label>
-      <label>✋ Left-hand cast
-        <select id="cast-left"></select>
-      </label>
-      <label>🤚 Right-hand cast
-        <select id="cast-right"></select>
-      </label>
+  <section class="console" aria-label="Director console">
+    <button id="btn-camera" class="btn btn-gold">📷&nbsp; Camera Chalu</button>
+    <button id="btn-demo" class="btn btn-ghost">🪄&nbsp; Demo Mode</button>
+    <button id="btn-record" class="btn btn-record" disabled>⏺&nbsp; Record Scene</button>
+    <a id="download" class="btn btn-download" hidden>⬇&nbsp; Film Download Karo</a>
+  </section>
+
+  <section class="casting" aria-label="Casting">
+    <h2><span class="h2-rule"></span>Casting<span class="h2-rule"></span></h2>
+    <div class="cast-grid">
+      <article class="cast-card">
+        <img id="thumb-body" class="thumb" alt="Body character preview">
+        <div class="cast-meta">
+          <div class="cast-role">Lead Actor · Tumhara Body</div>
+          <select id="cast-body" aria-label="Body cast"></select>
+        </div>
+      </article>
+      <article class="cast-card">
+        <img id="thumb-left" class="thumb" alt="Left hand character preview">
+        <div class="cast-meta">
+          <div class="cast-role">Supporting · Left Haath</div>
+          <select id="cast-left" aria-label="Left hand cast"></select>
+        </div>
+      </article>
+      <article class="cast-card">
+        <img id="thumb-right" class="thumb" alt="Right hand character preview">
+        <div class="cast-meta">
+          <div class="cast-role">Supporting · Right Haath</div>
+          <select id="cast-right" aria-label="Right hand cast"></select>
+        </div>
+      </article>
     </div>
   </section>
 
-  <section class="guide">
-    <h2>Kaise act karein</h2>
-    <ul>
-      <li><b>Ek haath upar</b> — main character wave karega · <b>dono haath upar</b> — open pose</li>
-      <li><b>Haath side mein failao</b> — point pose · <b>normal khade raho</b> — base pose</li>
-      <li><b>Munh kholo / O banao / smile karo</b> — character ka munh tumhare munh ke saath chalega (A / O / E), palak jhapkao toh woh bhi jhapkayega</li>
-      <li><b>Haathon ko camera ke paas lao</b> — har haath ek chhota character ban jayega; <b>angootha-ungli milao (pinch)</b> toh woh bolega</li>
-      <li><b>Record Scene</b> — tumhari awaaz mic se, film canvas se, ek saath record hogi</li>
-    </ul>
-    <p class="privacy">🔒 Sab kuch on-device chalta hai — Pose, Hand aur Face models tumhare phone/browser ke andar hi hain. Koi video kahin upload nahi hoti.</p>
+  <section class="playbill" aria-label="How to perform">
+    <h2>Director's Notes</h2>
+    <div class="acts">
+      <div class="act"><span class="act-no">Act I</span><p><b>Pose bano, character banega.</b> Ek haath upar — wave. Dono haath upar — open pose. Haath side mein — point. Tum jaise khade hoge, lead actor waisa hi khada hoga.</p></div>
+      <div class="act"><span class="act-no">Act II</span><p><b>Tumhara chehra, uska chehra.</b> Munh kholo toh uska A, gol munh pe O, smile pe E — aur palak jhapki toh uski bhi. Koi typing nahi, sirf acting.</p></div>
+      <div class="act"><span class="act-no">Act III</span><p><b>Haath = kathputli.</b> Dono haathon ko camera ke paas lao, har haath ek character ban jayega. Angootha-ungli milao (pinch) toh woh bolega.</p></div>
+      <div class="act"><span class="act-no">Finale</span><p><b>Record dabao, show shuru.</b> Canvas se film, mic se tumhari awaaz — ek saath record. Khatam hote hi download, seedha share karne layak.</p></div>
+    </div>
+    <p class="privacy">🔒 &nbsp;Poora show on-device chalta hai — Pose, Hand aur Face models tumhare phone ke andar hi hain. Koi video server pe nahi jaati, kabhi nahi.</p>
   </section>
 </main>
 
-<footer>Build Your First AI App 2026 · Rangmanch AR v0.1 · Characters: Rigpop Forge packs · Tracking: MediaPipe (on-device)</footer>
+<footer>
+  <span>Rangmanch AR · v0.2</span><span class="sep">✦</span>
+  <span>Characters: Rigpop Forge packs</span><span class="sep">✦</span>
+  <span>Tracking: MediaPipe, on-device</span><span class="sep">✦</span>
+  <span>Build Your First AI App 2026</span>
+</footer>
+
 <script type="module" src="app.js"></script>
 </body>
 </html>

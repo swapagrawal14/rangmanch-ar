@@ -1,57 +1,203 @@
+/* Rangmanch AR — theatre playbill art direction.
+   Palette: curtain red, marquee gold, playbill cream, warm ink. No gradients-purple, no glass. */
+:root {
+  --ink: #221409;
+  --ink-soft: #4a3421;
+  --cream: #f7ead7;
+  --cream-dim: #e8d5b5;
+  --red: #9c222b;
+  --red-deep: #701218;
+  --gold: #f2b33d;
+  --gold-soft: #ffd97a;
+  --stage-bg: #17100b;
+}
 * { box-sizing: border-box; }
+html, body { margin: 0; }
 body {
-  margin: 0; font-family: system-ui, "Segoe UI", sans-serif;
-  background: #131022; color: #f2efff;
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  color: var(--cream);
+  background:
+    radial-gradient(1100px 480px at 50% -120px, rgba(242,179,61,.14), transparent 60%),
+    radial-gradient(900px 600px at 50% 115%, rgba(156,34,43,.12), transparent 60%),
+    var(--stage-bg);
+  min-height: 100vh;
 }
-header {
-  display: flex; justify-content: space-between; align-items: flex-start;
-  gap: 16px; padding: 16px 20px 8px; flex-wrap: wrap;
+
+/* ---------- Marquee header ---------- */
+.marquee {
+  background: linear-gradient(180deg, #a32630, var(--red) 55%, var(--red-deep));
+  border-bottom: 4px solid var(--gold);
+  box-shadow: 0 10px 30px rgba(0,0,0,.45);
 }
-h1 { margin: 0; font-size: 28px; letter-spacing: .3px; }
-h1 .ar { color: #ffb703; }
-.tagline { margin: 4px 0 0; color: #c9c2ee; max-width: 560px; }
-.status-block { text-align: right; }
-.pill {
-  display: inline-block; background: #2a2350; border: 1px solid #4a3f8f;
-  padding: 5px 12px; border-radius: 999px; font-size: 13px;
+.bulbs {
+  height: 22px;
+  background-image: radial-gradient(circle at 50% 55%, #fff3c4 0 3px, var(--gold-soft) 4px, rgba(242,179,61,.0) 7px);
+  background-size: 38px 22px;
+  background-repeat: repeat-x;
+  animation: bulbPulse 1.6s ease-in-out infinite alternate;
 }
-.trackers { margin-top: 8px; font-size: 13px; color: #c9c2ee; }
+@keyframes bulbPulse { from { opacity: .75; } to { opacity: 1; } }
+.marquee-inner {
+  max-width: 1120px; margin: 0 auto; padding: 14px 20px 18px;
+  display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; align-items: flex-start;
+}
+.kicker {
+  text-transform: uppercase; letter-spacing: .32em; font-size: 11px;
+  color: var(--gold-soft); font-weight: 700;
+}
+h1 {
+  font-family: "Fraunces", serif; font-weight: 900;
+  font-size: clamp(38px, 6vw, 58px); line-height: .95; margin: 6px 0 8px;
+  color: var(--cream); text-shadow: 0 3px 0 rgba(0,0,0,.28);
+  letter-spacing: .01em;
+}
+h1 .ar { color: var(--gold); font-style: italic; }
+.tagline { margin: 0; max-width: 540px; color: #ffe9c9; font-size: 15.5px; line-height: 1.45; }
+.hand-note {
+  font-family: "Caveat", cursive; font-size: 22px; color: var(--gold-soft);
+  margin: 6px 0 0; transform: rotate(-1.2deg); display: inline-block;
+}
+.status-block { text-align: right; padding-top: 8px; }
+.ticket {
+  display: inline-block; background: var(--cream); color: var(--ink);
+  font-weight: 700; font-size: 13.5px; padding: 8px 16px;
+  border: 2px dashed var(--ink-soft); border-radius: 6px;
+  box-shadow: 0 3px 0 rgba(0,0,0,.3);
+}
+.trackers { margin-top: 12px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; }
+.t-item { margin-left: 14px; color: #ffe9c9; }
 .dot {
   display: inline-block; width: 10px; height: 10px; border-radius: 50%;
-  background: #554d80; margin: 0 4px 0 10px; vertical-align: middle;
+  background: rgba(0,0,0,.35); border: 1.5px solid rgba(255,233,201,.6);
+  margin-right: 6px; vertical-align: baseline;
 }
-.dot.on { background: #51e07a; box-shadow: 0 0 8px #51e07a; }
-.fps { margin-left: 10px; color: #ffb703; font-variant-numeric: tabular-nums; }
-main { padding: 8px 20px 20px; max-width: 1060px; margin: 0 auto; }
-.stage-wrap { position: relative; }
+.dot.on { background: #5be584; border-color: #d9ffe4; box-shadow: 0 0 10px #5be584; }
+.fps { margin-left: 14px; color: var(--gold-soft); font-variant-numeric: tabular-nums; text-transform: none; }
+
+/* ---------- Layout ---------- */
+main { max-width: 1120px; margin: 0 auto; padding: 22px 20px 8px; }
+
+/* ---------- Stage ---------- */
+.stage-frame {
+  position: relative; padding: 30px 30px 0;
+  background: #0f0a06; border: 3px solid #3a2410; border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.55), inset 0 0 0 2px rgba(242,179,61,.25);
+  overflow: hidden;
+}
+.curtain-top {
+  position: absolute; top: 0; left: 0; right: 0; height: 30px; z-index: 3;
+  background:
+    radial-gradient(circle at 14px -6px, transparent 15px, var(--red) 16px),
+    linear-gradient(180deg, #b02a33, var(--red-deep));
+  background-size: 28px 30px, 100% 100%;
+  border-bottom: 3px solid var(--gold);
+  filter: drop-shadow(0 4px 5px rgba(0,0,0,.5));
+}
+.curtain-side {
+  position: absolute; top: 0; bottom: 0; width: 30px; z-index: 3; pointer-events: none;
+  background: repeating-linear-gradient(90deg, #7c151d 0 7px, #a32630 7px 13px, #5f0e14 13px 20px);
+}
+.curtain-side.left { left: 0; box-shadow: 6px 0 12px rgba(0,0,0,.45); }
+.curtain-side.right { right: 0; box-shadow: -6px 0 12px rgba(0,0,0,.45); }
 canvas#stage {
-  width: 100%; aspect-ratio: 16/9; display: block;
-  background: #1d1838; border-radius: 16px; border: 2px solid #3a3170;
+  width: 100%; aspect-ratio: 16/9; display: block; position: relative; z-index: 1;
+  background: #241016; border-radius: 4px;
 }
+video#cam { display: none; }
 .stage-msg {
-  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
-  background: rgba(10,8,26,.78); padding: 8px 14px; border-radius: 10px;
-  font-size: 14px; max-width: 88%; text-align: center; pointer-events: none;
+  position: absolute; z-index: 4; left: 50%; bottom: 52px; transform: translateX(-50%);
+  background: rgba(20,11,4,.88); color: var(--cream);
+  border: 1.5px solid var(--gold); border-radius: 999px;
+  padding: 8px 18px; font-size: 14px; max-width: 88%; text-align: center; pointer-events: none;
 }
 .stage-msg:empty { display: none; }
-.controls { margin-top: 14px; }
-.controls .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
-button, .download {
-  background: #2a2350; color: #f2efff; border: 1px solid #574da0;
-  padding: 10px 16px; border-radius: 10px; font-size: 15px; cursor: pointer;
-  text-decoration: none;
+.stage-board {
+  position: relative; z-index: 2; margin: 0 -30px; padding: 10px 16px 12px;
+  text-align: center; color: #ffe9c9; letter-spacing: .14em; font-size: 12.5px; text-transform: uppercase;
+  background: repeating-linear-gradient(90deg, #4a2c17 0 90px, #43301d 90px 92px), #4a2c17;
+  border-top: 3px solid #2a1a0e;
 }
-button:hover:not(:disabled), .download:hover { background: #372e68; }
-button.primary { background: #ffb703; color: #231a00; border-color: #ffb703; font-weight: 700; }
-button.recording { background: #e63946; border-color: #e63946; color: #fff; font-weight: 700; }
-button:disabled { opacity: .45; cursor: not-allowed; }
-.cast label { font-size: 14px; color: #c9c2ee; display: flex; flex-direction: column; gap: 4px; }
-select {
-  background: #2a2350; color: #f2efff; border: 1px solid #574da0;
-  border-radius: 8px; padding: 8px 10px; font-size: 14px; min-width: 170px;
+
+/* ---------- Director console ---------- */
+.console {
+  display: flex; gap: 12px; flex-wrap: wrap; margin: 20px 0 6px;
 }
-.guide { margin-top: 16px; background: #1d1838; border: 1px solid #3a3170; border-radius: 14px; padding: 14px 18px; }
-.guide h2 { margin: 0 0 8px; font-size: 18px; }
-.guide ul { margin: 0; padding-left: 18px; line-height: 1.65; color: #ddd8f7; }
-.privacy { color: #9fe8b1; margin: 10px 0 0; font-size: 14px; }
-footer { text-align: center; color: #8f87bd; font-size: 12.5px; padding: 0 16px 20px; }
+.btn {
+  font-family: inherit; font-size: 15.5px; font-weight: 700; letter-spacing: .02em;
+  padding: 13px 22px; border-radius: 10px; cursor: pointer; text-decoration: none;
+  border: 2.5px solid var(--ink); box-shadow: 0 4px 0 var(--ink);
+  transition: transform .06s ease, box-shadow .06s ease, background .15s;
+  display: inline-flex; align-items: center;
+}
+.btn:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+.btn-gold { background: var(--gold); color: var(--ink); }
+.btn-gold:hover:not(:disabled) { background: var(--gold-soft); }
+.btn-ghost { background: transparent; color: var(--cream); border-color: var(--cream-dim); box-shadow: 0 4px 0 rgba(0,0,0,.55); }
+.btn-ghost:hover:not(:disabled) { background: rgba(247,234,215,.1); }
+.btn-record { background: var(--cream); color: var(--red-deep); border-color: var(--ink); }
+.btn-record.recording { background: #d92632; color: #fff; animation: recPulse 1s ease-in-out infinite alternate; }
+@keyframes recPulse { from { filter: brightness(1); } to { filter: brightness(1.25); } }
+.btn-download { background: #3f9e4d; color: #fff; }
+.btn:disabled { opacity: .42; cursor: not-allowed; }
+
+/* ---------- Casting ---------- */
+.casting { margin-top: 26px; }
+.casting h2, .playbill h2 {
+  font-family: "Fraunces", serif; font-weight: 900; font-size: 26px;
+  display: flex; align-items: center; gap: 14px; margin: 0 0 14px; color: var(--cream);
+}
+.h2-rule { flex: 1; height: 2px; background: linear-gradient(90deg, transparent, var(--gold), transparent); }
+.cast-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.cast-card {
+  background: var(--cream); color: var(--ink); border-radius: 12px;
+  border: 2.5px solid var(--ink); box-shadow: 0 5px 0 var(--ink);
+  padding: 12px; display: flex; gap: 12px; align-items: center;
+}
+.thumb {
+  width: 74px; height: 92px; object-fit: contain; flex: none;
+  background: radial-gradient(circle, #fff8ea 0 55%, #f1dfc0 100%);
+  border: 2px solid var(--ink-soft); border-radius: 8px;
+}
+.cast-role {
+  font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--red); margin-bottom: 6px;
+}
+.cast-card select {
+  width: 100%; font-family: inherit; font-size: 15.5px; font-weight: 700;
+  color: var(--ink); background: #fff8ea; border: 2px solid var(--ink);
+  border-radius: 8px; padding: 8px 10px; cursor: pointer; text-transform: capitalize;
+}
+
+/* ---------- Playbill ---------- */
+.playbill {
+  margin-top: 30px; background: var(--cream); color: var(--ink);
+  border: 3px double var(--red); border-radius: 10px;
+  padding: 22px 24px 18px; box-shadow: 0 14px 34px rgba(0,0,0,.4);
+}
+.playbill h2 { color: var(--ink); justify-content: center; }
+.acts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 26px; }
+.act p { margin: 4px 0 0; line-height: 1.55; font-size: 15px; color: #3a2712; }
+.act-no {
+  font-family: "Fraunces", serif; font-style: italic; font-weight: 900;
+  color: var(--red); font-size: 17px;
+}
+.privacy {
+  margin: 18px 0 0; padding-top: 12px; border-top: 1.5px dashed var(--ink-soft);
+  color: #256b34; font-weight: 500; font-size: 14.5px; text-align: center;
+}
+
+/* ---------- Footer ---------- */
+footer {
+  text-align: center; color: var(--cream-dim); font-size: 12px;
+  letter-spacing: .18em; text-transform: uppercase; padding: 22px 16px 28px;
+}
+footer .sep { color: var(--gold); margin: 0 10px; }
+
+@media (max-width: 760px) {
+  .cast-grid, .acts { grid-template-columns: 1fr; }
+  .status-block { text-align: left; }
+  .stage-frame { padding: 26px 18px 0; }
+  .curtain-side { width: 18px; }
+  .stage-board { margin: 0 -18px; font-size: 11px; }
+  .stage-msg { bottom: 64px; }
+}

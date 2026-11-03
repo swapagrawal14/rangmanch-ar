@@ -287,7 +287,7 @@ function render(nowMs) {
     ctx.restore();
   } else {
     const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    g.addColorStop(0, "#241d4d"); g.addColorStop(0.78, "#2e2566"); g.addColorStop(0.781, "#3a2c22"); g.addColorStop(1, "#4a3826");
+    g.addColorStop(0, "#2b1215"); g.addColorStop(0.78, "#3d1a12"); g.addColorStop(0.781, "#4a2c17"); g.addColorStop(1, "#5d3a1f");
     ctx.fillStyle = g; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "rgba(255,255,255,0.75)";
     ctx.font = "600 22px system-ui";
@@ -363,6 +363,11 @@ btnRecord.addEventListener("click", () => {
 // ---------- boot ----------
 async function boot() {
   const selects = { body: "cast-body", left: "cast-left", right: "cast-right" };
+  const thumbs = { body: "thumb-body", left: "thumb-left", right: "thumb-right" };
+  const setThumb = (slot) => {
+    const el = document.getElementById(thumbs[slot]);
+    if (el) el.src = `assets/packs/${state.cast[slot]}/talk/base.png`;
+  };
   for (const [slot, elId] of Object.entries(selects)) {
     const sel = document.getElementById(elId);
     for (const id of PACK_IDS) {
@@ -371,7 +376,8 @@ async function boot() {
       sel.appendChild(o);
     }
     sel.value = state.cast[slot];
-    sel.addEventListener("change", () => { state.cast[slot] = sel.value; });
+    setThumb(slot);
+    sel.addEventListener("change", () => { state.cast[slot] = sel.value; setThumb(slot); });
   }
   try {
     for (const id of PACK_IDS) state.packs[id] = await loadPack(id);
