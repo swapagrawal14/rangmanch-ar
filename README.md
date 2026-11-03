@@ -66,16 +66,16 @@ and camera-shy creator who can act but cannot animate.
 
 | You do this | The stage does this |
 |---|---|
-| Wave, dance, crouch, lean, walk | The lead's arms, torso and head follow **your** skeleton, bone by bone — it is not swapping pose pictures, it is wearing your movement |
-| Turn your head / look up or down | The lead's head turns and tilts with yours (its own head piece, foreshortened as it turns) |
-| Open your mouth / make an O / smile / laugh | Lead's mouth becomes **A / O / E** — laugh gets the big grin — the Rigpop Talk patches, composited live |
+| Wave, point, throw both arms open, thumbs-up | The lead performs its own drawing of that gesture — with **either** arm (the drawing is mirrored to match), even when your other hand is holding the phone |
+| Move, lean, step closer or back | The lead stands where you stand: its face on your face at selfie distance, its body on yours when you step back, and it leans with you |
+| Open your mouth / make an O / smile / laugh | Lead's mouth becomes **A / O / E** — laugh gets the big grin — the Rigpop Talk patches, composited on every pose, for all 16 characters |
 | Blink | Lead blinks |
-| Stand in front of the camera | You are never shown: your room blurs into backdrop colour and the character replaces you completely, at your size |
+| Stand in front of the camera | You are never shown: no camera pixel reaches the stage, the character replaces you completely |
 | Tick *Co-actors*, raise a hand | A full-size co-actor walks onto the stage floor on that side (off by default — the stage is yours alone) |
 | Move your hand around | The co-actor walks with it |
 | Pinch thumb + finger | The co-actor talks (its O-mouth fires) |
-| Type a caption, hit Record | Film + your mic voice record together, caption burned in |
-| Switch to 9:16 | Same stage, vertical — ready for Reels / Shorts |
+| Type a caption, hit Record | Film + your mic voice record together, caption burned in; save as MP4 (WebM on older browsers) or share straight from the phone |
+| Hold the phone upright | The stage opens in 9:16, ready for Reels / Shorts (tap 16:9 for landscape) |
 
 <p align="center">
   <img src="docs/assets/face-strip.png" alt="Face patches — A, O, E, blink" width="760">
@@ -100,9 +100,11 @@ Characters ────► Rigpop Forge packs, consumed as-is
 Stagecraft ────► The figure is never cut or warped: it is the artist's drawing,
                  kept alive with breath, idle bob, talk bounce and blink timers
                  (the PNGTuber recipe), placed by torso/face tracking.
-Stage ─────────► <canvas>: your room as a soft blur (you are never drawn),
-                 aspect-true landmark mapping, floor shadows, captions
-Film ──────────► canvas.captureStream(30) + mic track → MediaRecorder → download
+Stage ─────────► <canvas>: theatre backdrop tinted by your room's average
+                 colour (no camera pixel is ever drawn), aspect-true landmark
+                 mapping, floor shadows, captions
+Film ──────────► canvas.captureStream(30) + mic track → MediaRecorder
+                 (MP4 first, WebM with a patched duration as fallback) → save / share
 ```
 
 Performance is engineered, not hoped for: pose runs every frame while face and
@@ -111,6 +113,14 @@ single ~20 ms geometry scan, and if the frame rate
 sags the stage sheds load automatically and tells you on the ticket.
 
 ## Testing
+
+`node tests/v21.test.mjs` is the assert-based regression suite (37 checks at
+phone size: first-load weight, layout and overflow at 390×844, per-arm
+gestures, mirroring, flicker, pose normalisation, face anchors for all 16
+packs, camera-denied handling, MP4 recording at 9:16 and the WebM duration
+fix). `tests/_rig.mjs` explains the env vars (`PLAYWRIGHT_CORE_DIR`,
+`MP_MIRROR` for a local copy of the MediaPipe files). The older screenshot
+scripts:
 
 `tests/` drives the real app in Chromium (Playwright): console-error watch,
 Demo Mode, synthetic-performer scenarios (rest, wave + talk, look + laugh,
@@ -129,17 +139,26 @@ Engineering choices that matter:
   retargeting, so characters glide instead of jittering.
 - **Staggered inference, quality toggle.** High mode runs pose every frame;
   Balanced mode spreads the three models thinner for low-end phones.
-- **A puppet cut from the art itself.** Earlier versions swapped canned pose
-  images — and felt dead. Now, when a humanoid pack is cast as lead, the app
-  cuts its arms out of the base artwork in the browser (feathered strips along
-  the arm bones, holes filled by smearing neighbouring hair/dress pixels) and
-  re-poses them from your skeleton every frame. The torso, head and dress ride
-  your torso's position, tilt and scale; mouth/blink tiles ride the same
-  transform, so the face never drifts.
+- **Authored poses that never jump.** The pose drawings in a pack are separate
+  illustrations, often drawn at a different size and position (Bunty's
+  open-arms drawing is 72% of his base). `tools/measure-anchors.py` finds the
+  base face inside every pose drawing (multi-scale template match, validated
+  against the four hand-measured packs at a 5 px median error) and writes
+  `assets/anchors.json`; the stage maps each pose onto the base by its face,
+  so a swap is a clean cut with no shrink or teleport, and the mouth/blink
+  tiles land on every pose of every character. Weak matches are refused
+  (that pose plays without face tiles) rather than guessed.
+- **Gestures with either arm.** Each arm is read on its own, in shoulder-width
+  units, with time-based hysteresis (enter 160 ms, leave 450 ms, hold
+  600 ms). The gesture's side is known for every drawing, and the drawing is
+  mirrored when you use the other arm.
 - **Never a blank screen.** Demo Mode drives the whole cast with synthetic
   landmarks, so anyone (including judges) can see it without a camera.
-- **Lazy cast loading.** Only your three chosen characters download; swapping
-  cast mid-session fetches just that pack.
+- **Light on mobile data.** First load fetches only the lead's base art and
+  face tiles (~0.7 MB; its pose drawings stream in after) and 12 KB picker
+  thumbnails — not all 16 packs (29 MB before v2.1). Co-actor packs download
+  only when you tick Co-actors. The camera opens on the first tap while the
+  tracker (pose + face first, hands after) downloads with a progress readout.
 
 ## Run it
 
@@ -179,6 +198,8 @@ README visuals are generated from the packs' real art by
 - [x] v0.3 — all 16 packs, smoothing, quality toggle, 9:16 reel mode, captions, record timer + retake
 - [x] v0.4 — **You Become the Character**: live puppet rig (bone-by-bone conversion, no pose swaps), full-size stage co-actors conducted by your hands, all-English UI
 - [x] v0.5 — **Total Replacement**: raw camera self is never drawn (room becomes blurred backdrop colour), character sized to fully cover you, separate head piece that turns/tilts with your gaze, laugh-sensitive mouth, co-actors off by default
+- [x] v2.0 — **Stage Puppet**: authored poses + gesture classifier, cut-out rig removed
+- [x] v2.1 — **Phone first**: the stage fills a portrait phone (9:16 by default), camera on first tap, 29 MB → 0.7 MB first load, gestures with either arm (selfie-safe) and mirrored drawings, pose swaps without size jumps, face anchors for all 16 characters, MP4 recording + share sheet, WebM duration fix
 - [ ] Per-character voice pitch for takes, scene list / multi-take editor
 - [ ] Vendored models for a fully offline build
 - [ ] The demo reel: *Germ vs Toothbrush*, performed entirely inside Rangmanch

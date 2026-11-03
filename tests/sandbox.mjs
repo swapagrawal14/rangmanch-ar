@@ -12,12 +12,8 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-let chromium;
-try { ({ chromium } = await import('playwright-core')); }
-catch (e) {
-  const req = createRequire('/home/hatch/workspace/tools/testrig/package.json');
-  ({ chromium } = req('playwright-core'));
-}
+import { getChromium, routeMediapipe } from './_rig.mjs';
+const chromium = await getChromium();
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SHOTS = path.join(ROOT, 'tests', 'shots');
 mkdirSync(SHOTS, { recursive: true });
@@ -32,6 +28,7 @@ const browser = await chromium.launch({
   args: ['--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required']
 });
 const page = await browser.newPage({ viewport: { width: 1280, height: 950 } });
+await routeMediapipe(page);
 page.on('console', m => { if (m.type() === 'error') results.errors.push(m.text().slice(0, 300)); });
 page.on('pageerror', e => results.errors.push('pageerror: ' + String(e).slice(0, 300)));
 
@@ -162,7 +159,7 @@ await page.click('#btn-reel');
 
 // second rig pack end-to-end (sanjay: different art, kurta body)
 await page.evaluate(() => { window.__rangmanch.state.mode = 'idle'; });
-await page.selectOption('#cast-body', 'sanjay');
+await page.evaluate(() => window.__rangmanch.setLead('sanjay'));
 await page.waitForFunction(() => window.__rangmanch.packs.sanjay && window.__rangmanch.packs.sanjay.poses.wave, null, { timeout: 30000 }).catch(() => {});
 results.checks.sanjayPoses = await page.evaluate(() => !!window.__rangmanch.packs.sanjay.poses.wave);
 await page.evaluate(() => {
@@ -199,7 +196,7 @@ results.checks.faceOnly = true;
 // SELFIE FRAMING (the real phone case): hips out of frame + invisible, face
 // drives placement, and the ARMS must still switch the pose — v2.0 gated the
 // classifier on hips, so on a phone nothing ever happened.
-await page.selectOption('#cast-body', 'swapnil');
+await page.evaluate(() => window.__rangmanch.setLead('swapnil'));
 await page.waitForFunction(() => window.__rangmanch.packs.swapnil.poses.wave, null, { timeout: 20000 }).catch(() => {});
 await page.evaluate(() => {
   const R = window.__rangmanch;
@@ -248,7 +245,7 @@ results.checks.facePlacementCx = await page.evaluate(() => Math.round(window.__r
 await shot('18-hallucinated-hips');
 
 // recording round-trip (demo drives it)
-await page.selectOption('#cast-body', 'swapnil');
+await page.evaluate(() => window.__rangmanch.setLead('swapnil'));
 await page.evaluate(() => { window.__rangmanch.state.mode = 'idle'; });
 await page.click('#btn-demo'); // demo on (mode was idle after evaluate? ensure on)
 await sleep(400);
@@ -265,7 +262,7 @@ results.checks.downloadReady = await page.evaluate(() => {
 await shot('12-after-record');
 
 results.checks.thumbsOk = await page.evaluate(() =>
-  ['thumb-body', 'thumb-left', 'thumb-right'].every(id => { const i = document.getElementById(id); return i && i.complete && i.naturalWidth > 0; }));
+  [...document.querySelectorAll('#thumb-left, #thumb-right, .lead-pick img')].every(i => i.complete && i.naturalWidth > 0));
 
 console.log(JSON.stringify(results, null, 1));
 await browser.close();

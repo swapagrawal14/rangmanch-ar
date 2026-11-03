@@ -2,12 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#9c222b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <title>Rangmanch AR — One Camera, a Whole Cartoon Film</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,900&family=Space+Grotesk:wght@400;500;700&family=Caveat:wght@600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=2.1.0">
 </head>
 <body>
 
@@ -17,11 +20,11 @@
     <div class="title-block">
       <div class="kicker">Swapnil Agrawal presents</div>
       <h1>RANGMANCH <span class="ar">AR</span></h1>
-      <p class="tagline">Don't animate. Act. Your body becomes the cartoon — one person, every character, live on your own stage.</p>
+      <p class="tagline">Don't animate. Act. Stand in front of your phone and become the cartoon — your face, your gestures, your voice.</p>
       <p class="hand-note">one camera, an entire film company ✦</p>
     </div>
     <div class="status-block">
-      <div class="ticket" id="status-model">Models: load when the camera starts</div>
+      <div class="ticket" id="status-model">Tracker loads when the camera starts</div>
       <div class="trackers">
         <span class="t-item"><span class="dot" id="dot-pose"></span>Body</span>
         <span class="t-item"><span class="dot" id="dot-hand"></span>Hands</span>
@@ -38,58 +41,56 @@
     <div class="curtain-top" aria-hidden="true"></div>
     <div class="curtain-side left" aria-hidden="true"></div>
     <div class="curtain-side right" aria-hidden="true"></div>
-    <canvas id="stage" width="1280" height="720"></canvas>
-    <video id="cam" playsinline muted hidden></video>
-    <div class="stage-msg" id="stage-msg">Pick your cast, start the camera — or try Demo Mode with no camera at all.</div>
+    <canvas id="stage" width="1280" height="720" aria-label="The stage"></canvas>
+    <video id="cam" playsinline webkit-playsinline muted autoplay aria-hidden="true"></video>
+    <div class="stage-msg" id="stage-msg">Tap Start Camera and stand in front of your phone — or try Demo with no camera at all.</div>
     <div class="stage-board" aria-hidden="true">★ Tonight's show: You, playing every character ★</div>
   </section>
 
   <section class="console" aria-label="Director console">
-    <div class="console-row">
+    <div class="console-row primary">
       <button id="btn-camera" class="btn btn-gold">📷&nbsp; Start Camera</button>
-      <button id="btn-demo" class="btn btn-ghost">🪄&nbsp; Demo Mode</button>
-      <button id="btn-record" class="btn btn-record" disabled>⏺&nbsp; Record Scene</button>
-      <a id="download" class="btn btn-download" hidden download="rangmanch-scene.webm">⬇&nbsp; Download Film</a>
+      <button id="btn-record" class="btn btn-record" disabled>⏺&nbsp; Record</button>
+      <a id="download" class="btn btn-download" hidden download="rangmanch-scene.mp4">⬇&nbsp; Save film</a>
+      <button id="btn-share" class="btn btn-download" hidden>↗&nbsp; Share</button>
       <button id="btn-retake" class="btn btn-ghost" hidden>↩&nbsp; Retake</button>
     </div>
+  </section>
+
+  <section class="console-tools" aria-label="Stage options">
     <div class="console-row tools">
+      <button id="btn-demo" class="btn btn-ghost small">🪄&nbsp; Demo</button>
+      <button id="btn-reel" class="btn btn-ghost small" aria-pressed="false">📱&nbsp; 9:16</button>
+      <label class="tool check"><input type="checkbox" id="coactors"> Co-actors</label>
       <label class="tool">Quality
         <select id="quality">
-          <option value="high" selected>High — all three models, full speed</option>
-          <option value="balanced">Balanced — for lighter phones</option>
-          <option value="performance">Performance — lightest, smoothest</option>
+          <option value="high" selected>High</option>
+          <option value="balanced">Balanced</option>
+          <option value="performance">Light</option>
         </select>
       </label>
-      <button id="btn-reel" class="btn btn-ghost small">📱&nbsp; 9:16 Reel Mode</button>
-      <label class="tool"><span><input type="checkbox" id="coactors"> Co-actors (hands)</span></label>
-      <label class="tool grow">Caption — this line appears in the film
+      <label class="tool grow">Caption (burned into the film)
         <input id="caption-input" type="text" maxlength="90" placeholder="e.g. Germ: Defeated by a toothbrush again!">
       </label>
     </div>
   </section>
 
   <section class="casting" aria-label="Casting">
-    <h2><span class="h2-rule"></span>Casting<span class="h2-rule"></span></h2>
+    <h2><span class="h2-rule"></span>Who do you become?<span class="h2-rule"></span></h2>
+    <div class="lead-strip" id="lead-strip" role="group" aria-label="Lead character"></div>
     <div class="cast-grid">
       <article class="cast-card">
-        <img id="thumb-body" class="thumb" alt="Body character preview">
-        <div class="cast-meta">
-          <div class="cast-role">Lead Actor · Your Body</div>
-          <select id="cast-body" aria-label="Body cast"></select>
-        </div>
-      </article>
-      <article class="cast-card">
-        <img id="thumb-left" class="thumb" alt="Left hand character preview">
+        <img id="thumb-left" class="thumb" alt="Left co-actor preview">
         <div class="cast-meta">
           <div class="cast-role">Co-Actor · Left Side</div>
-          <select id="cast-left" aria-label="Left hand cast"></select>
+          <select id="cast-left" aria-label="Left co-actor"></select>
         </div>
       </article>
       <article class="cast-card">
-        <img id="thumb-right" class="thumb" alt="Right hand character preview">
+        <img id="thumb-right" class="thumb" alt="Right co-actor preview">
         <div class="cast-meta">
           <div class="cast-role">Co-Actor · Right Side</div>
-          <select id="cast-right" aria-label="Right hand cast"></select>
+          <select id="cast-right" aria-label="Right co-actor"></select>
         </div>
       </article>
     </div>
@@ -98,22 +99,22 @@
   <section class="playbill" aria-label="How to perform">
     <h2>Director's Notes</h2>
     <div class="acts">
-      <div class="act"><span class="act-no">Act I</span><p><b>You are completely replaced.</b> Your camera image is never shown — the room melts into a soft blur and the character stands exactly where you stand, at your size, cut live from its own artwork and re-posed on your skeleton every frame. Wave, dance, crouch, lean: it moves because <i>you</i> move.</p></div>
-      <div class="act"><span class="act-no">Act II</span><p><b>Your face is its face — including where you look.</b> Turn your head and its head turns. Look down, it looks down. Open your mouth for its A, round your lips for O, laugh for a big E grin — and when you blink, it blinks. No typing, no timeline. Just acting.</p></div>
-      <div class="act"><span class="act-no">Act III</span><p><b>Optional: hands conduct co-actors.</b> The stage is yours alone by default — no surprise characters. Tick <i>Co-actors</i> in the console when you want company: raise a hand and a full-size co-actor walks onto the stage floor; pinch thumb to finger and they talk.</p></div>
-      <div class="act"><span class="act-no">Finale</span><p><b>Press Record — the show begins.</b> The film comes from the canvas, the voice from your mic, recorded together. When you stop, the film is ready to download and share.</p></div>
+      <div class="act"><span class="act-no">Act I</span><p><b>You are replaced, never shown.</b> No camera image ever reaches the stage. The character stands where you stand — its face on your face at selfie distance, its whole body on yours when you step back — drawn from its own artwork, never cut up.</p></div>
+      <div class="act"><span class="act-no">Act II</span><p><b>Your face is its face.</b> Open your mouth for its A, round your lips for O, smile or laugh for a big E grin — and when you blink, it blinks. Tilt your head and it leans with you.</p></div>
+      <div class="act"><span class="act-no">Act III</span><p><b>Your arms pick its pose.</b> Wave, point, throw both arms open, or give a thumbs-up, and the character performs its own drawing of that gesture — with whichever arm you use, even with the other hand holding the phone.</p></div>
+      <div class="act"><span class="act-no">Finale</span><p><b>Press Record.</b> The film comes from the stage, the voice from your mic. Save it as MP4 (or WebM on older browsers) or share it straight to WhatsApp or Instagram. Tick <i>Co-actors</i> for company: raise a hand and a co-actor walks on; pinch to make them talk.</p></div>
     </div>
-    <p class="privacy">🔒 &nbsp;The whole show runs on-device — the Pose, Hand and Face models live inside your phone. No video ever goes to a server. Ever.</p>
+    <p class="privacy">🔒 &nbsp;Everything runs on your phone. The tracking models download once and run on-device; no video ever goes to a server.</p>
   </section>
 </main>
 
 <footer>
-  <span>Rangmanch AR · v2.0.2</span><span class="sep">✦</span>
+  <span>Rangmanch AR · v2.1.0</span><span class="sep">✦</span>
   <span>Characters: Rigpop Forge packs</span><span class="sep">✦</span>
   <span>Tracking: MediaPipe, on-device</span><span class="sep">✦</span>
   <span>Build Your First AI App 2026</span>
 </footer>
 
-<script type="module" src="app.js?v=2.0.2"></script>
+<script type="module" src="app.js?v=2.1.0"></script>
 </body>
 </html>

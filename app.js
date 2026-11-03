@@ -1,96 +1,136 @@
 'use strict';
-/* Rangmanch AR v2.0 — one-person cartoon studio.
+/* Rangmanch AR v2.1 — one-person cartoon studio, phone first.
    You act; the character performs. The lead is the pack's own authored art —
    complete gesture poses drawn on one canvas — switched by a gesture
    classifier reading your MediaPipe pose, while your face blendshapes drive
-   the A/O/E/blink tiles at each pose's hand-measured anchors (the compositing
-   the family pilot proved). The figure follows your torso; breath, bob and
-   blink timers keep it alive; bad tracking is refused, never drawn. Your room
-   is only ever blurred colour — you are never on screen. On-device only. */
+   the A/O/E/blink tiles at each pose's face anchors. Every pose drawing is
+   normalised onto the base drawing by its face (position + drawing scale,
+   assets/anchors.json), so a pose swap never makes the character jump in
+   size, and it is mirrored when you gesture with the other arm. The figure
+   follows your torso or face; breath, bob and blink timers keep it alive; bad
+   tracking is refused, never drawn. No camera pixel ever reaches the stage,
+   and nothing leaves the phone. */
 
 const $ = s => document.querySelector(s);
 const stage = $('#stage'), ctx = stage.getContext('2d');
 const cam = $('#cam'), msgEl = $('#stage-msg');
 const btnCam = $('#btn-camera'), btnDemo = $('#btn-demo'), btnRec = $('#btn-record'), btnRetake = $('#btn-retake');
-const downloadA = $('#download'), btnReel = $('#btn-reel');
-const selLead = $('#cast-body'), selLeft = $('#cast-left'), selRight = $('#cast-right');
+const downloadA = $('#download'), btnShare = $('#btn-share'), btnReel = $('#btn-reel');
+const leadStrip = $('#lead-strip'), selLeft = $('#cast-left'), selRight = $('#cast-right');
 const selQuality = $('#quality'), captionInput = $('#caption-input'), chkCo = $('#coactors');
 const statusModel = $('#status-model'), dotPose = $('#dot-pose'), dotHand = $('#dot-hand'), dotFace = $('#dot-face'), fpsEl = $('#fps');
 
-const WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
+const MP_VER = '0.10.14';
+const WASM = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/wasm`;
 const MODEL = 'https://storage.googleapis.com/mediapipe-models';
 const PACKS_BASE = 'assets/packs/';
-const VERSION = '2.0.2';
+const VERSION = '2.1.0';
 
 /* ---------- cast ---------- */
 const CAST = [
-  ['swapnil', 'Swapnil (you!)'], ['sanjay', 'Sanjay'], ['seema', 'Seema'], ['bhavishy', 'Bhavishy'],
+  ['swapnil', 'Swapnil'], ['sanjay', 'Sanjay'], ['seema', 'Seema'], ['bhavishy', 'Bhavishy'],
   ['mocha', 'Mocha the Cat'], ['bunty', 'Bunty the Bot'], ['pia', 'Pia the Pineapple'],
   ['solana', 'Solana'], ['rafi', 'Rafi'], ['kiko', 'Kiko'], ['mira', 'Mira'],
   ['bubbles', 'Bubbles'], ['luna', 'Luna'], ['puni', 'Puni'], ['static', 'Static'],
   ['doodle-swapnil', 'Doodle Swapnil']
 ];
-const packs = {};   // id -> {manifest, img, tiles, face, poses, anchors}
+const POSE_KEYS = ['wave', 'point', 'open', 'thumbs'];
+const packs = {};        // id -> pack (base art + tiles first; poses stream in after)
+const packLoads = {};    // id -> in-flight promise (no double downloads)
 const cast = { lead: 'swapnil', leftHand: 'mocha', rightHand: 'bunty' };
+let measured = null;     // assets/anchors.json (per-pose face anchors, scale, gesture side)
 
 function loadImage(src) {
-  return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+  return new Promise((res, rej) => { const i = new Image(); i.decoding = 'async'; i.onload = () => res(i); i.onerror = rej; i.src = src; });
 }
-/* Forge pack format (character.rigpop.json): talk.base is a path, talk.files
-   holds {A,O,E,blink} tile paths, talk.patches holds {key:{x,y,w,h}} rects,
-   talk.poseAnchors holds hand-measured centres where available. */
-async function ensurePack(id) {
-  if (packs[id]) return packs[id];
-  const base = PACKS_BASE + id + '/';
-  const manifest = await (await fetch(base + 'character.rigpop.json')).json();
-  const talk = manifest.talk || {};
-  const img = {};
-  if (talk.base) { try { img.base = await loadImage(base + talk.base); } catch (e) { /* missing */ } }
-  const tiles = {};
-  const files = talk.files || {};
-  for (const key of ['A', 'O', 'E', 'blink']) {
-    if (files[key]) { try { tiles[key] = await loadImage(base + files[key]); } catch (e) { /* none */ } }
-  }
-  const patches = talk.patches || {}, anchBase = (talk.poseAnchors || {}).base || null;
+async function loadMeasured() {
+  if (measured) return measured;
+  try { measured = (await (await fetch('assets/anchors.json?v=' + VERSION)).json()).packs || {}; }
+  catch (e) { measured = {}; }
+  return measured;
+}
+/* Per-pose face geometry: hand-measured talk.poseAnchors win; otherwise the
+   anchors measured by tools/measure-anchors.py. A pose with neither is
+   performed without face tiles — never with a mouth painted in the wrong place. */
+function buildPoseInfo(manifest, id) {
+  const talk = manifest.talk || {}, hand = talk.poseAnchors || {}, m = (measured && measured[id]) || {};
+  const patches = talk.patches || {};
   const centre = p => p ? [p.x + p.w / 2, p.y + p.h / 2] : null;
-  const face = {};
-  for (const key of ['A', 'O', 'E']) if (patches[key]) face[key] = { c: (anchBase && anchBase.mouth) || centre(patches[key]), w: patches[key].w };
-  if (patches.blink) face.blink = { c: (anchBase && anchBase.eyes) || centre(patches.blink), w: patches.blink.w };
-  // the authored gesture poses — complete drawings, same canvas/floor line
-  const poses = {};
-  const poseFiles = talk.poses || {};
-  for (const key of ['wave', 'point', 'open', 'thumbs']) {
-    if (poseFiles[key]) { try { poses[key] = await loadImage(base + poseFiles[key]); } catch (e) { /* none */ } }
+  const info = {};
+  for (const key of ['base', ...POSE_KEYS]) {
+    const h = hand[key], g = m[key] || {};
+    let mouth = null, eyes = null;
+    if (h && h.mouth && h.eyes) { mouth = h.mouth; eyes = h.eyes; }
+    else if (g.mouth && g.eyes && !g.refused) { mouth = g.mouth; eyes = g.eyes; }
+    else if (key === 'base') { mouth = centre(patches.A); eyes = centre(patches.blink); }
+    info[key] = { mouth, eyes, scale: (g.scale && !g.refused) ? g.scale : 1, side: g.side || null };
   }
-  packs[id] = { manifest, img, tiles, face, poses, anchors: talk.poseAnchors || {} };
-  return packs[id];
+  return info;
 }
-function updateThumb(role, id) {
-  const th = document.querySelector('#thumb-' + role);
-  if (th) th.src = PACKS_BASE + id + '/talk/base.png'; // every pack ships its base art
+/* Forge pack format (character.rigpop.json): talk.base, talk.files{A,O,E,blink},
+   talk.patches{key:{x,y,w,h}}, talk.poses{wave,point,open,thumbs}. Only what
+   is needed is fetched: base + face tiles now, pose drawings for the lead in
+   the background. */
+function ensurePack(id, withPoses) {
+  if (!packLoads[id]) {
+    packLoads[id] = (async () => {
+      await loadMeasured();
+      const base = PACKS_BASE + id + '/';
+      const manifest = await (await fetch(base + 'character.rigpop.json')).json();
+      const talk = manifest.talk || {};
+      const img = {}, tiles = {};
+      const files = talk.files || {};
+      await Promise.all([
+        talk.base ? loadImage(base + talk.base).then(i => { img.base = i; }).catch(() => {}) : null,
+        ...['A', 'O', 'E', 'blink'].map(k => files[k] ? loadImage(base + files[k]).then(i => { tiles[k] = i; }).catch(() => {}) : null)
+      ]);
+      packs[id] = { id, manifest, img, tiles, poses: {}, poseInfo: buildPoseInfo(manifest, id), posesLoading: null };
+      return packs[id];
+    })();
+  }
+  return packLoads[id].then(p => { if (withPoses) loadPoses(p); return p; });
 }
-async function fillCastSelects() {
-  for (const sel of [selLead, selLeft, selRight]) {
+function loadPoses(pack) {
+  if (pack.posesLoading) return pack.posesLoading;
+  const base = PACKS_BASE + pack.id + '/', poseFiles = (pack.manifest.talk || {}).poses || {};
+  pack.posesLoading = Promise.all(POSE_KEYS.map(k => poseFiles[k]
+    ? loadImage(base + poseFiles[k]).then(i => { pack.poses[k] = i; }).catch(() => {}) : null));
+  return pack.posesLoading;
+}
+const thumbSrc = id => 'assets/thumbs/' + id + '.webp';
+function updateThumb(role, id) { const th = document.querySelector('#thumb-' + role); if (th) th.src = thumbSrc(id); }
+
+function buildCasting() {
+  leadStrip.innerHTML = '';
+  for (const [id, name] of CAST) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'lead-pick'; b.dataset.id = id;
+    b.setAttribute('aria-pressed', id === cast.lead ? 'true' : 'false');
+    b.innerHTML = `<img loading="lazy" alt="" src="${thumbSrc(id)}"><span>${name}</span>`;
+    b.addEventListener('click', () => setLead(id));
+    leadStrip.appendChild(b);
+  }
+  for (const sel of [selLeft, selRight]) {
     sel.innerHTML = '';
     for (const [id, name] of CAST) { const o = document.createElement('option'); o.value = id; o.textContent = name; sel.appendChild(o); }
   }
-  selLead.value = cast.lead; selLeft.value = cast.leftHand; selRight.value = cast.rightHand;
-  for (const [id] of CAST) { try { await ensurePack(id); } catch (e) { /* offline pack */ } }
-  updateThumb('body', cast.lead); updateThumb('left', cast.leftHand); updateThumb('right', cast.rightHand);
+  selLeft.value = cast.leftHand; selRight.value = cast.rightHand;
+  updateThumb('left', cast.leftHand); updateThumb('right', cast.rightHand);
 }
-selLead.addEventListener('change', async () => {
-  cast.lead = selLead.value;
-  await ensurePack(cast.lead); updateThumb('body', cast.lead);
-  state.poseName = 'base'; state.candName = null; state.candCount = 0; state.figInit = false;
+async function setLead(id) {
+  cast.lead = id;
+  for (const b of leadStrip.querySelectorAll('.lead-pick')) b.setAttribute('aria-pressed', b.dataset.id === id ? 'true' : 'false');
+  state.poseName = 'base'; state.poseSide = null; state.candName = null; state.figInit = false;
+  try { await ensurePack(id, true); } catch (e) { setMsg('Could not load that character — check your connection.'); }
+}
+selLeft.addEventListener('change', async () => { cast.leftHand = selLeft.value; updateThumb('left', cast.leftHand); if (chkCo.checked) ensurePack(cast.leftHand).catch(() => {}); });
+selRight.addEventListener('change', async () => { cast.rightHand = selRight.value; updateThumb('right', cast.rightHand); if (chkCo.checked) ensurePack(cast.rightHand).catch(() => {}); });
+chkCo.addEventListener('change', () => {
+  if (chkCo.checked) { ensurePack(cast.leftHand).catch(() => {}); ensurePack(cast.rightHand).catch(() => {}); if (state.mode === 'camera') ensureHands(); }
 });
-selLeft.addEventListener('change', async () => { cast.leftHand = selLeft.value; await ensurePack(cast.leftHand); updateThumb('left', cast.leftHand); });
-selRight.addEventListener('change', async () => { cast.rightHand = selRight.value; await ensurePack(cast.rightHand); updateThumb('right', cast.rightHand); });
 
-/* Pack geometry from the REAL data files. v2.0 does not cut the illustration
-   at all (the research verdict: nobody ships a runtime cut-up of a finished
-   drawing) — the puppet is the pack's own authored drawings. Geometry is only
-   PLACEMENT math: face proportions from the talk patches (WowKit), figure
-   bounds from a single alpha scan of the base art. */
+/* Placement geometry from the base art: a single alpha scan for the figure
+   bounds plus the face proportions from the talk patches. */
 const geomCache = new WeakMap();
 function packGeom(pack) {
   if (geomCache.has(pack)) return geomCache.get(pack);
@@ -108,23 +148,21 @@ function packGeom(pack) {
     }
     if (x1 > x0 && y1 > y0) bbox = { x0, y0, x1, y1 };
   } catch (e) { /* keep full canvas */ }
-  const pat = t.patches || {};
-  const aB = (t.poseAnchors || {}).base || {};
-  const faceCx = aB.eyes ? aB.eyes[0] : (W / 2);
-  const eyeY = aB.eyes ? aB.eyes[1] : (bbox.y0 + (bbox.y1 - bbox.y0) * 0.18);
-  const mouthY = aB.mouth ? aB.mouth[1] : (eyeY + 70);
+  const pat = t.patches || {}, b = pack.poseInfo.base;
+  const faceCx = b.eyes ? b.eyes[0] : (W / 2);
+  const eyeY = b.eyes ? b.eyes[1] : (bbox.y0 + (bbox.y1 - bbox.y0) * 0.18);
+  const mouthY = b.mouth ? b.mouth[1] : (eyeY + 70);
   const blinkW = pat.blink ? pat.blink.w : 140;
   const headH = (mouthY - eyeY) * 3.1;
   const top = Math.max(bbox.y0, eyeY - headH * 0.74);
   const neckY = top + headH * 1.06;
   const hipY = neckY + (bbox.y1 - top) * 0.44;
-  const geom = { W, H, bbox, faceCx, eyeY, mouthY, blinkW, neckY, hipY, bboxBottom: bbox.y1 };
+  const geom = { W, H, bbox, faceCx, eyeY, mouthY, blinkW, neckY, hipY, headTop: bbox.y0, bboxBottom: bbox.y1 };
   geomCache.set(pack, geom);
   return geom;
 }
 
-/* One Euro filter — the avatar industry's standard landmark conditioner:
-   heavy smoothing when still (kills jitter), almost no lag when moving. */
+/* One Euro filter — heavy smoothing when still, almost no lag when moving. */
 class OneEuro {
   constructor(minCutoff = 1.0, beta = 0.02, dCutoff = 1.0) { this.mc = minCutoff; this.beta = beta; this.dc = dCutoff; this.x = null; this.dx = 0; this.t = 0; }
   snap(x) { this.x = x; this.dx = 0; }
@@ -132,8 +170,7 @@ class OneEuro {
     if (this.x === null) { this.x = x; this.t = t; return x; }
     const dt = Math.max(1 / 240, Math.min(0.1, ((t - this.t) / 1000) || (1 / 60))); this.t = t;
     const aD = 1 / (1 + 1 / (2 * Math.PI * this.dc * dt));
-    const dxRaw = (x - this.x) / dt;
-    this.dx += aD * (dxRaw - this.dx);
+    this.dx += aD * ((x - this.x) / dt - this.dx);
     const cutoff = this.mc + this.beta * Math.abs(this.dx);
     const a = 1 / (1 + 1 / (2 * Math.PI * cutoff * dt));
     this.x += a * (x - this.x);
@@ -147,12 +184,12 @@ function makePlacementFilters() {
 /* ---------- state ---------- */
 const state = {
   mode: 'idle', pose: null, face: null, hands: [],
-  recording: false, chunks: [], recorder: null, stream: null,
-  recUrl: null, recStart: 0, quality: 'high', reel: false, bg: null,
-  hpS: { yaw: 0, pitch: 0, roll: 0 }, msgAt: 0, autoBalanced: false, lowFpsSince: 0,
-  poseName: 'base', candName: null, candCount: 0, poseSince: 0,
+  recording: false, chunks: [], recorder: null, stream: null, recMime: '',
+  recUrl: null, recBlob: null, recStart: 0, quality: 'high', reel: false,
+  hpS: { yaw: 0, pitch: 0, roll: 0 }, msgAt: 0, lowFpsSince: 0, tint: 'rgba(120,70,50,0.20)', tintAt: 0,
+  poseName: 'base', poseSide: null, candName: null, candSide: null, candSince: 0, poseSince: 0,
   wristHist: { a: [], b: [] }, fig: null, figInit: false, talkSm: 0, nextBlink: 0,
-  leadFeetY: 0, leadH: 0,
+  leadFeetY: 0, leadH: 0, figDbg: null, mouthDbg: null, wakeLock: null,
   actors: { left: { p: 0, x: 0, talk: 0, talkT: 0, last: 0, tx: 0 }, right: { p: 0, x: 0, talk: 0, talkT: 0, last: 0, tx: 0 } }
 };
 const raw = { pose: null, face: null, hands: [] };
@@ -170,35 +207,79 @@ function smoothLm(prev, next, a) {
 function smoothAll(alpha) {
   state.pose = raw.pose ? smoothLm(state.pose, raw.pose, alpha) : null; // lost body = stop, don't ghost
   state.hands = raw.hands.map((h, i) => smoothLm(state.hands[i], h, alpha));
-  state.face = raw.face ? {
-    landmarks: smoothLm(state.face && state.face.landmarks, raw.face.landmarks, alpha),
-    cats: raw.face.cats
-  } : state.face;
+  // the face model runs on alternate frames and misses the odd frame: hold the
+  // last face briefly so placement never jumps between face and body framing
+  const now = performance.now();
+  if (raw.face) { state.face = { landmarks: smoothLm(state.face && state.face.landmarks, raw.face.landmarks, alpha), cats: raw.face.cats }; state.faceAt = now; }
+  else if (!state.face || now - (state.faceAt || 0) > 600) state.face = null;
 }
 
-/* ---------- MediaPipe ---------- */
-let poseL = null, handL = null, faceL = null, lastVideoTime = -1, frameNo = 0;
-let inferErrors = 0, cpuMode = false, lastPoseAt = 0, noPoseMsgAt = 0;
-async function initModels(forceCpu) {
-  statusModel.textContent = 'Models: loading…';
-  const { FilesetResolver, PoseLandmarker, HandLandmarker, FaceLandmarker } =
-    await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
-  const vision = await FilesetResolver.forVisionTasks(WASM);
-  const mk = async (Cls, path, extra) => {
-    const opts = d => Object.assign({ baseOptions: { modelAssetPath: `${MODEL}/${path}`, delegate: d }, runningMode: 'VIDEO', numPoses: 1, numHands: 2 }, extra || {});
-    if (forceCpu) return await Cls.createFromOptions(vision, opts('CPU'));
-    try { return await Cls.createFromOptions(vision, opts('GPU')); } catch (e) { return await Cls.createFromOptions(vision, opts('CPU')); }
-  };
-  poseL = await mk(PoseLandmarker, 'pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task');
-  handL = await mk(HandLandmarker, 'hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task');
-  faceL = await mk(FaceLandmarker, 'face_landmarker/face_landmarker/float16/1/face_landmarker.task', { outputFaceBlendshapes: true });
-  statusModel.textContent = cpuMode ? 'Models: ready ✅ (CPU mode)' : 'Models: ready ✅';
+/* ---------- MediaPipe ----------
+   Models are fetched with progress (shown on the ticket) and handed to
+   MediaPipe as buffers. Pose + face load first so you are live sooner; the
+   hand model (only needed for thumbs-up and co-actors) follows. */
+let vision = null, Tasks = null, poseL = null, handL = null, faceL = null, lastVideoTime = -1, frameNo = 0;
+let inferErrors = 0, cpuMode = false, lastPoseAt = 0, noPoseMsgAt = 0, modelsLoading = null, handsLoading = null;
+const MODEL_FILES = {
+  pose: 'pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+  face: 'face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+  hand: 'hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task'
+};
+const modelBufs = {};
+async function fetchModel(key, onProgress) {
+  if (modelBufs[key]) return modelBufs[key];
+  const res = await fetch(`${MODEL}/${MODEL_FILES[key]}`);
+  if (!res.ok) throw new Error('model download failed (' + res.status + ')');
+  const total = +res.headers.get('content-length') || 0;
+  if (!res.body || !total) { modelBufs[key] = new Uint8Array(await res.arrayBuffer()); return modelBufs[key]; }
+  const reader = res.body.getReader(), parts = []; let got = 0;
+  for (;;) { const { done, value } = await reader.read(); if (done) break; parts.push(value); got += value.length; onProgress && onProgress(got, total); }
+  const buf = new Uint8Array(got); let o = 0; for (const p of parts) { buf.set(p, o); o += p.length; }
+  modelBufs[key] = buf; return buf;
 }
-/* Pose runs every frame (it carries the body). Face and hands alternate on
-   even/odd frames — they read perfectly at half rate and the stage stays
-   smooth on phone GPUs. 'High' quality runs everything every frame. */
-async function infer() {
-  if (!poseL || cam.readyState < 2 || cam.currentTime === lastVideoTime) return;
+async function makeTask(Cls, key, extra, forceCpu) {
+  const opts = d => Object.assign({ baseOptions: { modelAssetBuffer: modelBufs[key].slice(), delegate: d }, runningMode: 'VIDEO', numPoses: 1, numHands: 2 }, extra || {});
+  if (forceCpu) return Cls.createFromOptions(vision, opts('CPU'));
+  try { return await Cls.createFromOptions(vision, opts('GPU')); } catch (e) { return Cls.createFromOptions(vision, opts('CPU')); }
+}
+function initModels(forceCpu) {
+  if (modelsLoading && !forceCpu) return modelsLoading;
+  modelsLoading = (async () => {
+    const prog = { pose: 0, face: 0 };
+    const show = () => { statusModel.textContent = `Tracker: downloading ${Math.round((prog.pose + prog.face) / 2 * 100)}%`; };
+    statusModel.textContent = 'Tracker: downloading…';
+    const [mod] = await Promise.all([
+      Tasks ? Promise.resolve(Tasks) : import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/vision_bundle.mjs`),
+      fetchModel('pose', (g, t) => { prog.pose = g / t; show(); }),
+      fetchModel('face', (g, t) => { prog.face = g / t; show(); })
+    ]);
+    Tasks = mod;
+    statusModel.textContent = 'Tracker: starting…';
+    if (!vision) vision = await Tasks.FilesetResolver.forVisionTasks(WASM);
+    poseL = await makeTask(Tasks.PoseLandmarker, 'pose', null, forceCpu);
+    faceL = await makeTask(Tasks.FaceLandmarker, 'face', { outputFaceBlendshapes: true }, forceCpu);
+    statusModel.textContent = cpuMode ? 'Tracker: live ✅ (CPU mode)' : 'Tracker: live ✅';
+    if (chkCo.checked || forceCpu) ensureHands(forceCpu);
+    else setTimeout(() => ensureHands(), 1500); // thumbs-up reads the hand model too
+  })();
+  modelsLoading.catch(() => { modelsLoading = null; });
+  return modelsLoading;
+}
+function ensureHands(forceCpu) {
+  if (handL && !forceCpu) return Promise.resolve(handL);
+  if (handsLoading && !forceCpu) return handsLoading;
+  handsLoading = (async () => {
+    await fetchModel('hand');
+    handL = await makeTask(Tasks.HandLandmarker, 'hand', null, forceCpu || cpuMode);
+    return handL;
+  })();
+  handsLoading.catch(() => { handsLoading = null; });
+  return handsLoading;
+}
+/* Pose every frame (it carries the body); face and hands share the rest.
+   Lower quality tiers spread the models thinner. */
+function infer() {
+  if (!poseL || !faceL || cam.readyState < 2 || cam.currentTime === lastVideoTime) return;
   lastVideoTime = cam.currentTime; frameNo++;
   const t = performance.now();
   const q = state.quality;
@@ -211,7 +292,7 @@ async function infer() {
       raw.pose = pr.landmarks && pr.landmarks[0] ? pr.landmarks[0] : null;
       if (raw.pose) { lastPoseAt = performance.now(); inferErrors = 0; }
     }
-    if (frameNo % handEvery === 0) {
+    if (handL && frameNo % handEvery === 0) {
       const hr = handL.detectForVideo(cam, t);
       raw.hands = hr.landmarks || [];
     }
@@ -229,72 +310,58 @@ async function infer() {
     // phones — after repeated failures, rebuild the models on CPU and go on
     inferErrors++;
     if (inferErrors === 20 && !cpuMode) {
-      cpuMode = true; poseL = null;
-      initModels(true).catch(() => { statusModel.textContent = 'Models: failed — tap Start Camera to retry'; });
+      cpuMode = true; poseL = null; faceL = null; handL = null;
+      initModels(true).catch(() => { statusModel.textContent = 'Tracker failed — tap Start Camera to retry'; });
     }
   }
 }
 
 /* ---------- demo mode (synthetic performer) ---------- */
 function synthDemo(t) {
-  const s = t / 1000, bob = Math.sin(s * 1.6) * 0.008, wave = (Math.sin(s * 0.7) > 0.3);
+  const s = t / 1000, bob = Math.sin(s * 1.6) * 0.008, phase = Math.floor(s / 3.2) % 4;
   const P = [];
   for (let i = 0; i < 33; i++) P.push({ x: 0.5, y: 0.5, z: 0, visibility: 1 });
   const set = (i, x, y) => { P[i] = { x, y: y + bob, z: 0, visibility: 1 }; };
-  set(0, 0.5, 0.30); set(11, 0.44, 0.38); set(12, 0.56, 0.38);
-  set(23, 0.46, 0.58); set(24, 0.54, 0.58);
-  set(13, 0.40, 0.50); set(15, 0.37, 0.62);
-  if (wave) { set(14, 0.62, 0.30); set(16, 0.58 + Math.sin(s * 6) * 0.03, 0.16); }
-  else { set(14, 0.60, 0.50); set(16, 0.63, 0.62); }
-  set(25, 0.45, 0.74); set(26, 0.55, 0.74); set(27, 0.44, 0.90); set(28, 0.56, 0.90);
+  set(0, 0.5, 0.30); set(2, 0.515, 0.285); set(5, 0.485, 0.285); set(11, 0.56, 0.38); set(12, 0.44, 0.38);
+  set(23, 0.54, 0.58); set(24, 0.46, 0.58);
+  // phase 0 rest, 1 wave (user's right hand), 2 point, 3 open
+  set(13, 0.60, 0.50); set(15, 0.63, 0.62); set(14, 0.40, 0.50); set(16, 0.37, 0.62);
+  if (phase === 1) { set(14, 0.38, 0.30); set(16, 0.40 + Math.sin(s * 7) * 0.035, 0.16); }
+  if (phase === 2) { set(14, 0.32, 0.385); set(16, 0.20, 0.39); }
+  if (phase === 3) { set(13, 0.66, 0.28); set(15, 0.70, 0.17); set(14, 0.34, 0.28); set(16, 0.30, 0.17); }
+  set(25, 0.55, 0.74); set(26, 0.45, 0.74); set(27, 0.56, 0.90); set(28, 0.44, 0.90);
   raw.pose = P;
   const hand = [];
   for (let i = 0; i < 21; i++) hand.push({ x: 0.25, y: 0.6, z: 0 });
-  const hx = 0.22 + Math.sin(s * 0.9) * 0.05, hy = 0.62 + Math.sin(s * 2.1) * 0.02;
+  const hx = 0.78 + Math.sin(s * 0.9) * 0.05, hy = 0.62 + Math.sin(s * 2.1) * 0.02;
   hand[0] = { x: hx, y: hy, z: 0 }; hand[9] = { x: hx + 0.01, y: hy - 0.05, z: 0 };
   const pinch = Math.sin(s * 2.4) > 0.55;
-  hand[4] = { x: hx - 0.02, y: hy - 0.07, z: 0 };
-  hand[8] = pinch ? { x: hx - 0.019, y: hy - 0.068, z: 0 } : { x: hx - 0.05, y: hy - 0.10, z: 0 };
+  hand[4] = { x: hx - 0.02, y: hy - 0.07, z: 0 }; hand[5] = { x: hx, y: hy - 0.04, z: 0 };
+  hand[8] = pinch ? { x: hx - 0.019, y: hy - 0.068, z: 0 } : { x: hx - 0.05, y: hy - 0.03, z: 0 };
   raw.hands = [hand];
-  const cats = { eyeBlinkLeft: (Math.sin(s * 0.9) > 0.97) ? 0.9 : 0.02, eyeBlinkRight: 0.02, jawOpen: Math.max(0, Math.sin(s * 2.4)) * 0.55, mouthSmileLeft: 0.3, mouthSmileRight: 0.3, mouthFunnel: 0 };
+  const cats = { eyeBlinkLeft: (Math.sin(s * 0.9) > 0.97) ? 0.9 : 0.02, eyeBlinkRight: (Math.sin(s * 0.9) > 0.97) ? 0.9 : 0.02, jawOpen: Math.max(0, Math.sin(s * 2.4)) * 0.55, mouthSmileLeft: 0.3, mouthSmileRight: 0.3, mouthFunnel: 0 };
   const fl = []; for (let i = 0; i < 468; i++) fl.push({ x: 0.5, y: 0.3, z: 0 });
-  // a face that slowly looks left, then right — shows off the gaze tracking
-  const yawA = Math.sin(s * 0.45) * 0.035;
-  fl[1] = { x: 0.5 + yawA, y: 0.315, z: 0 };
-  fl[33] = { x: 0.465, y: 0.30, z: 0 }; fl[263] = { x: 0.535, y: 0.30, z: 0 };
+  fl[1] = { x: 0.5 + Math.sin(s * 0.45) * 0.01, y: 0.315, z: 0 };
+  fl[33] = { x: 0.535, y: 0.30, z: 0 }; fl[263] = { x: 0.465, y: 0.30, z: 0 };
   raw.face = { landmarks: fl, cats };
 }
 
 /* ---------- stage helpers ---------- */
 function setMsg(t) { msgEl.textContent = t || ''; msgEl.style.opacity = t ? '1' : '0'; state.msgAt = performance.now(); }
-/* Landmarks arrive normalised to the CAMERA frame. Map them into the stage
-   with the aspect preserved (fit, centred) — otherwise a landscape camera on
-   the portrait reel stage would stretch the performer and detach the arms. */
+/* Landmarks arrive normalised to the CAMERA frame. They are mapped onto the
+   stage aspect-true with COVER (the camera fills the stage, overflow cropped),
+   so the character stands where you stand on a portrait phone stage. */
 const MAP = { sw: 1280, sh: 720, ox: 0, oy: 0 };
 function updateMap() {
   const W = stage.width, H = stage.height;
-  const srcA = (state.mode === 'camera' && cam.videoWidth) ? cam.videoWidth / cam.videoHeight : 16 / 9;
+  const srcA = (state.mode === 'camera' && cam.videoWidth) ? cam.videoWidth / cam.videoHeight : W / H;
   let sw = W, sh = W / srcA;
-  if (sh > H) { sh = H; sw = H * srcA; }
+  if (sh < H) { sh = H; sw = H * srcA; }
   MAP.sw = sw; MAP.sh = sh; MAP.ox = (W - sw) / 2; MAP.oy = (H - sh) / 2;
 }
 function toPx(p) { return { x: MAP.ox + (1 - p.x) * MAP.sw, y: MAP.oy + p.y * MAP.sh }; }
 function mid(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-function headPoseRaw() {
-  const fl = state.face && state.face.landmarks;
-  if (!fl || !fl[1] || !fl[33] || !fl[263]) return null;
-  const nose = toPx(fl[1]), e1 = toPx(fl[33]), e2 = toPx(fl[263]);
-  // in the mirrored stage view, pick the canvas-left and canvas-right eyes —
-  // using the raw landmark order flips the roll to 180° on a level face
-  const eLft = e1.x < e2.x ? e1 : e2, eRgt = e1.x < e2.x ? e2 : e1;
-  const eyeMid = mid(e1, e2), eyeDist = Math.max(10, Math.hypot(e2.x - e1.x, e2.y - e1.y));
-  return {
-    yaw: Math.max(-0.75, Math.min(0.75, (nose.x - eyeMid.x) / (eyeDist * 0.55))),
-    pitch: Math.max(-0.55, Math.min(0.55, (nose.y - eyeMid.y) / eyeDist - 0.62)),
-    roll: Math.max(-0.32, Math.min(0.32, Math.atan2(eRgt.y - eLft.y, eRgt.x - eLft.x)))
-  };
-}
 function drawTile(img, cx, cy, w, rot) {
   if (!img) return;
   const h = w * img.naturalHeight / img.naturalWidth;
@@ -305,27 +372,8 @@ function shadow(x, y, w) {
   ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.30)';
   ctx.beginPath(); ctx.ellipse(x, y, w / 2, w * 0.09, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
 }
-function drawStrip(st, liveFrom, liveTo) {
-  const rf = st.from, rt = st.to;
-  const ra = Math.atan2(rt[1] - rf[1], rt[0] - rf[0]), la = Math.atan2(liveTo.y - liveFrom.y, liveTo.x - liveFrom.x);
-  const rl = Math.hypot(rt[0] - rf[0], rt[1] - rf[1]) || 1, ll = Math.hypot(liveTo.x - liveFrom.x, liveTo.y - liveFrom.y);
-  if (ll < 4) return;
-  ctx.save(); ctx.translate(liveFrom.x, liveFrom.y); ctx.rotate(la - ra); ctx.scale(ll / rl, ll / rl);
-  ctx.drawImage(st.img, -(rf[0] - st.box[0]), -(rf[1] - st.box[1])); ctx.restore();
-}
 
-/* ---------- the lead: the Stage Puppet (v2.0) ----------
-   The research verdict, implemented: the character is NEVER cut up. It is the
-   pack's own authored drawings — base + wave/point/open/thumbs, complete
-   illustrations on the same canvas and floor line. Your pose landmarks drive a
-   gesture classifier (with hysteresis, so it cannot flicker); your face
-   blendshapes drive the A/O/E/blink tiles at the CURRENT POSE's hand-measured
-   anchors — the exact compositing the delivered family pilot proved. The whole
-   figure follows your torso (position, scale, lean), and a secondary-motion
-   layer (breath, idle bob, talk bounce, blink timer) keeps it alive. Bad or
-   missing tracking is REFUSED (hold the last good state), never drawn. */
-/* Face state from the app's canonical blendshape map (inferAll converts
-   MediaPipe categories into `cats` once, at capture). */
+/* Face state from the blendshape map. */
 function faceState() {
   const out = { mouth: null, wide: false, blink: false, laugh: false };
   const c = (state.face && state.face.cats) || null;
@@ -347,24 +395,14 @@ function faceState() {
   }
   return out;
 }
-/* Head pose from landmarks (the pipeline stores landmarks + cats, no matrix):
-   roll = the eye line's on-screen angle, yaw/pitch = nose offset in eye spans. */
-let hpRaw = { yaw: 0, pitch: 0, roll: 0 };
+/* Head roll from the eye line (canvas space, mirrored view). */
 function updateHeadPose() {
   const fl = state.face && state.face.landmarks;
   if (!fl || !fl[33] || !fl[263] || !fl[1]) return;
-  const le = toPx(fl[33]), re = toPx(fl[263]), nose = toPx(fl[1]);
-  const midE = mid(le, re);
-  const span = Math.max(8, Math.hypot(re.x - le.x, re.y - le.y));
-  hpRaw = {
-    roll: Math.atan2(re.y - le.y, re.x - le.x),
-    yaw: clamp((nose.x - midE.x) / span, -1, 1),
-    pitch: clamp((nose.y - midE.y) / span - 0.32, -1, 1)
-  };
-  const a = 0.35;
-  state.hpS.yaw += (hpRaw.yaw - state.hpS.yaw) * a;
-  state.hpS.pitch += (hpRaw.pitch - state.hpS.pitch) * a;
-  state.hpS.roll += (hpRaw.roll - state.hpS.roll) * a;
+  const a = toPx(fl[33]), b = toPx(fl[263]);
+  const l = a.x < b.x ? a : b, r = a.x < b.x ? b : a;
+  const roll = clamp(Math.atan2(r.y - l.y, r.x - l.x), -0.4, 0.4);
+  state.hpS.roll += (roll - state.hpS.roll) * 0.35;
 }
 
 function elbowAngle(a, b, c) {
@@ -372,58 +410,90 @@ function elbowAngle(a, b, c) {
   const d = (Math.hypot(v1x, v1y) * Math.hypot(v2x, v2y)) || 1;
   return Math.acos(Math.max(-1, Math.min(1, (v1x * v2x + v1y * v2y) / d))) * 180 / Math.PI;
 }
-/* Gesture classifier: reads the performer's pose, returns the pack pose that
-   matches, or null ("hold"). Only fully-visible joints count — anything else
-   is refused, Kalidokit-style, instead of being followed into garbage. */
+/* Gesture classifier: returns {name, side} ('L'/'R' = the side of the STAGE
+   the gesturing arm is on) or null. Each arm is judged on its own, so the
+   usual selfie — one hand holding the phone, out of frame — still waves,
+   points and gives thumbs-up with the free arm. A joint that is not clearly
+   visible is refused, never followed into garbage. Distances are in
+   shoulder widths, so the same gesture reads the same at any distance. */
 function classifyGesture() {
-  const lm = state.pose, H = stage.height;
+  const lm = state.pose;
   if (!lm) return null;
-  // Arms only. Hips are out of frame in the normal selfie framing — gating on
-  // them (v2.0) meant gestures never fired on a phone held at arm's length.
-  for (const i of [11, 12]) if ((lm[i].visibility ?? 1) < 0.45) return null;
-  for (const i of [13, 14, 15, 16]) if ((lm[i].visibility ?? 1) < 0.35) return null;
+  const vis = i => (lm[i].visibility ?? 1);
+  const inFrame = i => lm[i].x > -0.02 && lm[i].x < 1.02 && lm[i].y > -0.02 && lm[i].y < 1.02;
+  if (vis(11) < 0.5 || vis(12) < 0.5) { state.gestDbg = { shoulders: false }; return null; }
   const p = i => toPx(lm[i]);
-  const hipsSeen = (lm[23].visibility ?? 1) > 0.45 && (lm[24].visibility ?? 1) > 0.45;
-  const hipC = hipsSeen ? mid(p(23), p(24)) : null, nose = p(0);
-  const shoW = Math.max(30, Math.hypot(p(12).x - p(11).x, p(12).y - p(11).y));
-  const mk = (si, ei, wi, hist) => {
-    const sho = p(si), elb = p(ei), wri = p(wi);
-    hist.push(wri.x); if (hist.length > 14) hist.shift();
-    let rev = 0;
-    for (let i = 2; i < hist.length; i++) { const d1 = hist[i - 1] - hist[i - 2], d2 = hist[i] - hist[i - 1]; if (d1 * d2 < 0 && Math.abs(d2) > 2) rev++; }
-    return { sho, elb, wri, raised: wri.y < sho.y - H * 0.035, straight: elbowAngle(sho, elb, wri) > 152, osc: rev >= 2 };
+  const shoW = Math.max(24, Math.hypot(p(12).x - p(11).x, p(12).y - p(11).y));
+  const nose = p(0);
+  const arm = (si, ei, wi, hist) => {
+    // the wrist carries wave/open/point; the elbow (often out of frame at
+    // selfie distance) is only needed to know the arm is straight
+    if (!(vis(wi) > 0.4 && inFrame(wi))) { hist.length = 0; return { refused: true, vw: +vis(wi).toFixed(2), wx: +lm[wi].x.toFixed(2), wy: +lm[wi].y.toFixed(2) }; }
+    const elbOk = vis(ei) > 0.35 && inFrame(ei);
+    const sho = p(si), elb = elbOk ? p(ei) : null, wri = p(wi);
+    hist.push({ x: wri.x, t: performance.now() });
+    while (hist.length && performance.now() - hist[0].t > 900) hist.shift();
+    let rev = 0, lastD = 0;
+    for (let i = 1; i < hist.length; i++) {
+      const d = hist[i].x - hist[i - 1].x;
+      if (Math.abs(d) < shoW * 0.04) continue;
+      if (lastD && d * lastD < 0) rev++;
+      lastD = d;
+    }
+    return {
+      sho, elb, wri, side: wri.x < (p(11).x + p(12).x) / 2 ? 'L' : 'R',
+      raised: wri.y < sho.y - shoW * 0.25, high: wri.y < nose.y + shoW * 0.1,
+      straight: !!elb && elbowAngle(sho, elb, wri) > 150, osc: rev >= 2
+    };
   };
-  const A = mk(11, 13, 15, state.wristHist.a), B = mk(12, 14, 16, state.wristHist.b);
-  if ((A.raised && A.osc) || (B.raised && B.osc)) return 'wave';
-  if (A.raised && B.raised) return 'open';
-  if ((A.raised && A.wri.y < nose.y + H * 0.02) || (B.raised && B.wri.y < nose.y + H * 0.02)) return 'wave';
-  const pointing = s => s.straight && Math.abs(s.wri.y - s.sho.y) < H * 0.10 && Math.abs(s.wri.x - s.sho.x) > shoW * 0.55;
-  const reachA = Math.abs(A.wri.x - A.sho.x), reachB = Math.abs(B.wri.x - B.sho.x);
-  if ((pointing(A) && !B.raised && reachA > reachB * 1.6) || (pointing(B) && !A.raised && reachB > reachA * 1.6)) return 'point';
+  const A = arm(11, 13, 15, state.wristHist.a), B = arm(12, 14, 16, state.wristHist.b);
+  const dbg = s => s && !s.refused ? { side: s.side, raised: s.raised, high: s.high, osc: s.osc, straight: s.straight } : s;
+  state.gestDbg = { A: dbg(A), B: dbg(B) };
+  const arms = [A, B].filter(s => s && !s.refused);
+  const okA = A && !A.refused ? A : null, okB = B && !B.refused ? B : null;
+  if (okA && okB && okA.raised && okB.raised && !(okA.osc !== okB.osc && (okA.osc || okB.osc) && Math.abs(okA.wri.y - okB.wri.y) > shoW * 0.6)) return { name: 'open', side: null };
+  for (const s of arms) if (s.raised && (s.osc || s.high)) return { name: 'wave', side: s.side };
+  for (const s of arms) {
+    const other = s === okA ? okB : okA;
+    const reach = Math.abs(s.wri.x - s.sho.x);
+    if (s.straight && Math.abs(s.wri.y - s.sho.y) < shoW * 0.45 && reach > shoW * 0.75 &&
+        !(other && other.raised) && (!other || reach > Math.abs(other.wri.x - other.sho.x) * 1.5)) return { name: 'point', side: s.side };
+  }
   for (const h of state.hands) {
-    if (!h[0] || !h[4] || !h[5] || !h[8]) continue;
+    if (!h[0] || !h[4] || !h[5] || !h[8] || !h[17]) continue;
     const w = toPx(h[0]), tt = toPx(h[4]), im = toPx(h[5]), it = toPx(h[8]);
-    if (tt.y < w.y - H * 0.03 && it.y > im.y - H * 0.01 && w.y < (hipC ? hipC.y + H * 0.12 : H * 0.78)) return 'thumbs';
+    const handSz = Math.max(8, Math.hypot(im.x - w.x, im.y - w.y));
+    // thumb tip well above the knuckles, index curled (tip not above its knuckle)
+    if (tt.y < im.y - handSz * 0.8 && it.y > im.y - handSz * 0.15) return { name: 'thumbs', side: w.x < stage.width / 2 ? 'L' : 'R' };
   }
   return null;
 }
+/* Time-based hysteresis (frame counts mean different things at 10 and 60 fps):
+   a gesture must hold 160 ms to enter, its absence 450 ms to return to base,
+   and every pose is held at least 600 ms — so swaps are hard cuts, never flicker. */
 function updatePoseChoice(now) {
-  const cand = classifyGesture();
-  if (cand === state.candName) state.candCount++; else { state.candName = cand; state.candCount = 1; }
-  const need = cand ? 3 : 5; // entering a pose is fast; leaving it is steadier
-  const want = cand || 'base';
-  if (want !== state.poseName && state.candCount >= need && now - state.poseSince > 550) {
-    state.poseName = want; state.poseSince = now;
+  const c = classifyGesture();
+  const name = c ? c.name : null, side = c ? c.side : null;
+  if (name !== state.candName || (name && side !== state.candSide)) { state.candName = name; state.candSide = side; state.candSince = now; }
+  const want = name || 'base';
+  const held = now - state.candSince;
+  if ((want !== state.poseName || (name && side !== state.poseSide)) && held >= (name ? 160 : 450) && now - state.poseSince > 600) {
+    state.poseName = want; state.poseSide = side; state.poseSince = now;
   }
 }
 
-/* Draws the whole figure for the current pose, with face tiles composited at
-   that pose's own hand-measured anchors, inside the figure's transform — so
-   the face can never split from the head again. */
+/* Draws the figure for the current pose. Each pose drawing is mapped onto the
+   base drawing by its face (anchor + measured drawing scale), mirrored when
+   you gesture with the other arm, and its face tiles are drawn inside the same
+   transform — so the face can never split from the head, and a pose swap never
+   resizes or teleports the character. */
 function drawFigure(pack, now, cx, feetY, h, roll) {
   const G = packGeom(pack);
-  const img = pack.poses[state.poseName] || pack.img.base;
+  let key = state.poseName;
+  if (key !== 'base' && !pack.poses[key]) key = 'base'; // pose art still streaming in
+  const img = key === 'base' ? pack.img.base : pack.poses[key];
   if (!img) return;
+  const pi = pack.poseInfo[key] || {}, bi = pack.poseInfo.base || {};
   const s = h / G.H;
   const fs = faceState();
   state.talkSm += ((fs.mouth ? 1 : 0) - state.talkSm) * 0.3;
@@ -432,26 +502,42 @@ function drawFigure(pack, now, cx, feetY, h, roll) {
   shadow(cx, Math.min(stage.height - 5, feetY + bob * s * 8), G.W * s * 0.60);
   ctx.save();
   ctx.translate(cx, feetY + bob * s * 8); ctx.rotate(roll); ctx.scale(s, s * breath);
-  ctx.drawImage(img, -G.W / 2, -G.bboxBottom, G.W, G.H);
-  const anch = pack.anchors[state.poseName] || pack.anchors.base || null;
+  ctx.translate(-G.W / 2, -G.bboxBottom); // now in base-drawing pixels
+  // pose drawing -> base drawing: match the face centre and the drawing scale
+  const fc = a => a.mouth && a.eyes ? [(a.mouth[0] + a.eyes[0]) / 2, (a.mouth[1] + a.eyes[1]) / 2] : null;
+  const bF = fc(bi), pF = fc(pi);
+  const k = clamp(1 / (pi.scale || 1), 0.7, 1.6);
+  const mirror = key !== 'base' && pi.side && state.poseSide && pi.side !== state.poseSide;
+  if (key !== 'base' && bF && pF) {
+    ctx.translate(bF[0], bF[1]); if (mirror) ctx.scale(-1, 1); ctx.scale(k, k); ctx.translate(-pF[0], -pF[1]);
+  } else if (mirror) {
+    ctx.translate(G.W / 2, 0); ctx.scale(-1, 1); ctx.translate(-G.W / 2, 0);
+  }
+  if (pi.eyes && pi.mouth) { // where this drawing's face lands on stage (tests + debugging)
+    const m = ctx.getTransform(), T = q => [m.a * q[0] + m.c * q[1] + m.e, m.b * q[0] + m.d * q[1] + m.f];
+    const e = T(pi.eyes), mo = T(pi.mouth);
+    state.faceDbg = [Math.round((e[0] + mo[0]) / 2), Math.round((e[1] + mo[1]) / 2), Math.round(Math.hypot(e[0] - mo[0], e[1] - mo[1]))];
+  } else state.faceDbg = null;
+  ctx.drawImage(img, 0, 0, G.W, G.H);
   const patches = (pack.manifest.talk || {}).patches || {};
-  if (anch) {
-    const lx = ax => ax - G.W / 2, ly = ay => ay - G.bboxBottom;
-    const autoBlink = !state.face && now > state.nextBlink && now < state.nextBlink + 130;
-    if ((fs.blink || autoBlink) && pack.tiles.blink && patches.blink && anch.eyes) {
-      const tw = patches.blink.w, th = tw * pack.tiles.blink.naturalHeight / pack.tiles.blink.naturalWidth;
-      ctx.drawImage(pack.tiles.blink, lx(anch.eyes[0]) - tw / 2, ly(anch.eyes[1]) - th / 2, tw, th);
-    }
-    const mouthKey = fs.mouth || (fs.laugh ? 'E' : null);
-    if (mouthKey && pack.tiles[mouthKey] && patches[mouthKey] && anch.mouth) {
-      const tw = patches[mouthKey].w * ((fs.wide || fs.laugh) ? 1.2 : 1);
-      const th = tw * pack.tiles[mouthKey].naturalHeight / pack.tiles[mouthKey].naturalWidth;
-      ctx.drawImage(pack.tiles[mouthKey], lx(anch.mouth[0]) - tw / 2, ly(anch.mouth[1]) - th / 2, tw, th);
-    }
+  const tileScale = pi.scale || 1;
+  const autoBlink = !state.face && now > state.nextBlink && now < state.nextBlink + 130;
+  state.mouthDbg = null;
+  if ((fs.blink || autoBlink) && pack.tiles.blink && patches.blink && pi.eyes) {
+    const tw = patches.blink.w * tileScale, th = tw * pack.tiles.blink.naturalHeight / pack.tiles.blink.naturalWidth;
+    ctx.drawImage(pack.tiles.blink, pi.eyes[0] - tw / 2, pi.eyes[1] - th / 2, tw, th);
+  }
+  const mouthKey = fs.mouth || (fs.laugh ? 'E' : null);
+  if (mouthKey && pack.tiles[mouthKey] && patches[mouthKey] && pi.mouth) {
+    const tw = patches[mouthKey].w * tileScale * ((fs.wide || fs.laugh) ? 1.2 : 1);
+    const th = tw * pack.tiles[mouthKey].naturalHeight / pack.tiles[mouthKey].naturalWidth;
+    ctx.drawImage(pack.tiles[mouthKey], pi.mouth[0] - tw / 2, pi.mouth[1] - th / 2, tw, th);
+    state.mouthDbg = mouthKey;
   }
   ctx.restore();
   if (!state.face && now > state.nextBlink + 130) state.nextBlink = now + 2400 + Math.random() * 1800;
-  state.leadFeetY = feetY; state.leadH = h;
+  state.leadFeetY = feetY; state.leadH = h; state.leadCx = cx;
+  state.leadW = (G.bbox.x1 - G.bbox.x0) * s * 0.7; // body, not flowing hair
 }
 
 function drawLead(now) {
@@ -459,59 +545,81 @@ function drawLead(now) {
   if (!pack || !pack.img.base) return;
   const W = stage.width, H = stage.height, G = packGeom(pack);
   if (!state.fig) state.fig = makePlacementFilters();
-  let tcx, tFeetY, th, troll, live = false;
+  let tcx, tFeetY, th, troll, live = false, how = 'idle';
   const lm = state.pose;
-  if (lm) updatePoseChoice(now); // gestures read the ARMS — they must run in every framing, selfie included
-  // MediaPipe happily hallucinates hips BELOW the frame at selfie distance
-  // (her phone screenshot: BODY green, character shrunk by a phantom torso).
-  // The torso branch may only run when the hips are really in frame.
+  if (lm) updatePoseChoice(now); // gestures read the arms — in every framing, selfie included
+  if (state.face) updateHeadPose();
+  // MediaPipe hallucinates hips below the frame at selfie distance; the torso
+  // branch only runs when the hips are really in frame.
   const inFrame = p => p && p.x > -0.05 && p.x < 1.05 && p.y > -0.05 && p.y < 1.02;
   const hipsVis = !!(lm && inFrame(lm[23]) && inFrame(lm[24]) && (lm[23].visibility ?? 1) > 0.55 && (lm[24].visibility ?? 1) > 0.55);
   if (lm && hipsVis && lm[11] && lm[12]) {
-    // full/upper body: the figure stands where you stand, sized by your torso
+    // full / upper body: the figure stands where you stand, sized by your torso
     const neckC = mid(toPx(lm[11]), toPx(lm[12])), hipC = mid(toPx(lm[23]), toPx(lm[24]));
     const torsoLive = Math.max(26, Math.hypot(hipC.x - neckC.x, hipC.y - neckC.y));
-    th = Math.max(H * 0.25, Math.min(H * 1.12, (G.H * torsoLive) / Math.max(60, G.hipY - G.neckY)));
-    const s = th / G.H;
+    th = clamp((G.H * torsoLive) / Math.max(60, G.hipY - G.neckY), H * 0.3, H * 1.12);
+    let s = th / G.H;
     tcx = hipC.x; tFeetY = hipC.y + (G.bboxBottom - G.hipY) * s;
+    // whole body in frame: stand on your feet with eyes at your eye line —
+    // cartoon proportions (big head, short torso) make torso scaling float
+    const ankOk = i => inFrame(lm[i]) && (lm[i].visibility ?? 1) > 0.5;
+    if (ankOk(27) && ankOk(28) && (lm[2].visibility ?? 1) > 0.5 && (lm[5].visibility ?? 1) > 0.5) {
+      const ank = mid(toPx(lm[27]), toPx(lm[28])), eyeP = mid(toPx(lm[2]), toPx(lm[5]));
+      const span = (ank.y - eyeP.y) * 1.04; // ankle -> sole
+      if (span > H * 0.2 && eyeP.y < neckC.y) { // eyes must sit above the shoulders
+        th = clamp((G.H * span) / Math.max(60, G.bboxBottom - G.eyeY), H * 0.3, H * 1.12);
+        tFeetY = eyeP.y + span; s = th / G.H;
+      }
+    }
     const tilt = Math.atan2(neckC.y - hipC.y, neckC.x - hipC.x) + Math.PI / 2;
     troll = clamp(tilt * 0.55 + state.hpS.roll * 0.25, -0.32, 0.32);
-    live = true;
+    live = true; how = 'body';
   } else if (state.face && state.face.landmarks) {
-    // face only (the usual selfie framing): you still ARE the character —
-    // head-driven placement, gesture poses hold, face fully alive
+    // face framing (the usual selfie): the character's face sits on yours
     const fl = state.face.landmarks, le = fl[33], re = fl[263];
     if (le && re) {
-      const eyeSpan = Math.hypot(toPx(re).x - toPx(le).x, toPx(re).y - toPx(le).y);
-      const eyeC = mid(toPx(le), toPx(re));
-      th = Math.max(H * 0.3, Math.min(H * 1.6, (G.H * eyeSpan) / Math.max(20, G.blinkW)));
+      const a = toPx(le), b = toPx(re);
+      const eyeSpan = Math.hypot(b.x - a.x, b.y - a.y), eyeC = mid(a, b);
+      // capped so head-to-waist stays on stage: a selfie face is far bigger
+      // than a cartoon face at body scale, and gestures need room
+      th = clamp((G.H * eyeSpan) / Math.max(20, G.blinkW), H * 0.45, H * 1.0);
       const s = th / G.H;
       tcx = eyeC.x + (G.W / 2 - G.faceCx) * s;
       tFeetY = eyeC.y + (G.bboxBottom - G.eyeY) * s;
       troll = clamp(state.hpS.roll * 0.6, -0.35, 0.35);
-      live = true;
+      live = true; how = 'face';
     }
   }
   if (!live && lm && lm[11] && lm[12] && (lm[11].visibility ?? 1) > 0.5 && (lm[12].visibility ?? 1) > 0.5) {
     // shoulders only: scale from shoulder width, stand on the neck line
     const neckC = mid(toPx(lm[11]), toPx(lm[12]));
     const shoLive = Math.max(20, Math.hypot(toPx(lm[12]).x - toPx(lm[11]).x, toPx(lm[12]).y - toPx(lm[11]).y));
-    th = Math.max(H * 0.25, Math.min(H * 1.3, (G.H * shoLive) / (G.blinkW * 1.86)));
+    th = clamp((G.H * shoLive) / (G.blinkW * 1.86), H * 0.3, H * 1.0);
     const s = th / G.H;
     tcx = neckC.x; tFeetY = neckC.y + (G.bboxBottom - G.neckY) * s;
     troll = clamp(state.hpS.roll * 0.3, -0.3, 0.3);
-    live = true;
+    live = true; how = 'shoulders';
   }
   if (!live) { // idle stage pose
-    tcx = W / 2; th = H * 0.92; tFeetY = H - 6; troll = 0;
-    if (state.poseName !== 'base') { state.poseName = 'base'; state.poseSince = now; }
+    th = H * (state.reel ? 0.62 : 0.86); tcx = W / 2; tFeetY = H * 0.965; troll = 0;
+    if (state.poseName !== 'base') { state.poseName = 'base'; state.poseSide = null; state.poseSince = now; }
   }
+  // keep the whole head on stage (with headroom for a raised hand) and the
+  // figure horizontally on stage — tracking near the frame edge must never
+  // push the face out of the film
+  const s0 = th / G.H;
+  const headTopY = tFeetY - (G.bboxBottom - G.headTop) * s0;
+  const minTop = H * (live ? 0.07 : 0.04);
+  if (headTopY < minTop) tFeetY += minTop - headTopY;
+  const halfW = (G.bbox.x1 - G.bbox.x0) * s0 * 0.35;
+  tcx = clamp(tcx, Math.min(W / 2, halfW), Math.max(W / 2, W - halfW));
   if (!state.figInit) { // snap on the first frame / after a cast change
     state.fig.cx.snap(tcx); state.fig.feetY.snap(tFeetY); state.fig.h.snap(th); state.fig.roll.snap(troll);
     state.figInit = true;
   }
   const cx = state.fig.cx.filter(tcx, now), feetY = state.fig.feetY.filter(tFeetY, now);
   const h = state.fig.h.filter(th, now), roll = state.fig.roll.filter(troll, now);
+  state.figDbg = { how, cx: Math.round(cx), feetY: Math.round(feetY), h: Math.round(h), headTop: Math.round(feetY - (G.bboxBottom - G.headTop) * h / G.H) };
   drawFigure(pack, now, cx, feetY, h, roll);
 }
 
@@ -522,52 +630,66 @@ function drawCoActors(now) {
     if (!h[9]) continue;
     const mcp = toPx(h[9]);
     const a = state.actors[mcp.x < W / 2 ? 'left' : 'right'];
-    a.tx = mcp.x; a.last = now;
+    a.tx = clamp(mcp.x, W * 0.12, W * 0.88); a.last = now;
     a.talkT = Math.hypot(h[4].x - h[8].x, h[4].y - h[8].y) < 0.045 ? 1 : 0;
   }
+  // the stage floor: the lead's feet when they are on stage, else the boards
+  const floorY = Math.min(state.leadFeetY || H, H * 0.97);
+  const baseH = Math.min(state.leadH || H * 0.7, H * 0.8) * 0.72;
   for (const sideName of ['left', 'right']) {
     const a = state.actors[sideName];
-    const pack = packs[sideName === 'left' ? cast.leftHand : cast.rightHand];
+    const id = sideName === 'left' ? cast.leftHand : cast.rightHand, pack = packs[id];
+    if (!pack && !packLoads[id]) ensurePack(id).catch(() => {}); // fetched on first use
     a.p += (((now - a.last < 900) ? 1 : 0) - a.p) * 0.07;
     a.talk += ((a.talkT || 0) - a.talk) * 0.3;
     if (!pack || !pack.img.base || a.p < 0.02) continue;
-    if (!a.x) a.x = a.tx || W / 2;
-    a.x += ((a.tx || a.x) - a.x) * 0.12;
     const img = pack.img.base;
-    // sidekicks scale with the lead, not the frame — vital in 9:16 reel mode
-    const fullH = (state.leadH || H * 0.7) * 0.72, h = fullH * (0.25 + 0.75 * a.p);
-    const w = h * img.naturalWidth / img.naturalHeight;
-    const floorY = state.leadFeetY || (H - 4); // stand on the lead's floor line, not the frame edge
+    const ar = img.naturalWidth / img.naturalHeight;
+    // on a narrow stage next to a big lead there is little room: the co-actor
+    // shrinks to the space beside the lead (peeking in from the wings)
+    const room = state.leadCx ? (sideName === 'left' ? state.leadCx - (state.leadW || 0) / 2 : W - state.leadCx - (state.leadW || 0) / 2) : W;
+    const fullH = Math.min(baseH, floorY * 0.85, Math.max(W * 0.22, room * 1.5) / ar), h = fullH * (0.25 + 0.75 * a.p);
+    const w = h * ar;
+    // co-actors stand BESIDE the lead, never on top of them (the narrow 9:16
+    // stage put both hands' actors over the lead's body)
+    const sep = (state.leadW || W * 0.2) * 0.5 + w * 0.45;
+    let tx = a.tx || (sideName === 'left' ? 0 : W);
+    if (state.leadCx) tx = sideName === 'left' ? Math.min(tx, state.leadCx - sep) : Math.max(tx, state.leadCx + sep);
+    tx = clamp(tx, w * 0.12, W - w * 0.12);
+    if (!a.x) a.x = tx;
+    a.x += (tx - a.x) * 0.12;
     const feetY = floorY + (1 - a.p) * fullH * 0.75;
     const bobA = Math.sin(now / 300 + (sideName === 'left' ? 0 : 2)) * 3 + (a.talk > 0.5 ? Math.sin(now / 60) * 4 : 0);
     ctx.save(); ctx.globalAlpha = Math.min(1, a.p * 1.6);
     shadow(a.x, Math.min(H - 4, feetY), w * 0.75);
     ctx.translate(a.x, feetY + bobA * a.p);
-    ctx.rotate(Math.max(-0.08, Math.min(0.08, ((a.tx || a.x) - a.x) * 0.0009)));
+    ctx.rotate(clamp((tx - a.x) * 0.0009, -0.08, 0.08));
     ctx.drawImage(img, -w / 2, -h, w, h);
-    ctx.restore();
-    if (a.talk > 0.5 && pack.tiles.O && pack.face && pack.face.O) {
-      ctx.save(); ctx.globalAlpha = Math.min(1, a.p * 1.6);
-      drawTile(pack.tiles.O,
-        a.x - w / 2 + pack.face.O.c[0] / img.naturalWidth * w,
-        feetY + bobA * a.p - h + pack.face.O.c[1] / img.naturalHeight * h,
-        pack.face.O.w * (w / img.naturalWidth) * 1.15, 0);
-      ctx.restore();
+    const bi = pack.poseInfo.base, pat = (pack.manifest.talk || {}).patches || {};
+    if (a.talk > 0.5 && pack.tiles.O && bi.mouth && pat.O) {
+      drawTile(pack.tiles.O, -w / 2 + bi.mouth[0] / img.naturalWidth * w, -h + bi.mouth[1] / img.naturalHeight * h, pat.O.w * (w / img.naturalWidth) * 1.15, 0);
     }
+    ctx.restore();
   }
 }
 
 /* ---------- render loop ---------- */
 function fitStage() {
   const w = state.reel ? 720 : 1280, h = state.reel ? 1280 : 720;
-  if (stage.width !== w) { stage.width = w; stage.height = h; }
+  if (stage.width !== w || stage.height !== h) { stage.width = w; stage.height = h; state.figInit = false; }
 }
 function roundRectPath(x, y, w, h, r) {
   ctx.beginPath(); ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
   ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
-let fpsFrames = 0, fpsLast = 0, fpsEMA = 60, lastFrameT = 0;
+function wrapLines(text, maxW) {
+  const words = text.split(/\s+/), lines = []; let cur = '';
+  for (const w of words) { const t = cur ? cur + ' ' + w : w; if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; }
+  if (cur) lines.push(cur);
+  return lines.slice(0, 3);
+}
+let fpsLast = 0, fpsEMA = 60, lastFrameT = 0;
 function loop(ts) {
   requestAnimationFrame(loop);
   fitStage();
@@ -578,130 +700,257 @@ function loop(ts) {
   if (state.mode === 'demo') synthDemo(ts || 0);
   smoothAll(state.mode === 'idle' ? 1 : 0.62);
   const W = stage.width, H = stage.height;
-  ctx.clearRect(0, 0, W, H);
-  if (state.mode === 'camera' && cam.readyState >= 2) {
-    // NO camera pixels reach the stage at all — Swapnil's verdict, three
-    // times over: she must never see herself. The room contributes exactly
-    // one average colour, used as a soft glow behind the theatre backdrop.
+  // NO camera pixels reach the stage: the room contributes one average colour,
+  // sampled twice a second (a per-frame GPU readback stalls phone GPUs)
+  if (state.mode === 'camera' && cam.readyState >= 2 && ts - state.tintAt > 500) {
+    state.tintAt = ts;
     if (!state.bg) { state.bg = document.createElement('canvas'); state.bg.width = 1; state.bg.height = 1; }
-    const bgc = state.bg.getContext('2d');
-    bgc.drawImage(cam, 0, 0, 1, 1);
-    let tint = 'rgba(120,70,50,0.20)';
-    try { const px = bgc.getImageData(0, 0, 1, 1).data; tint = `rgba(${px[0]},${px[1]},${px[2]},0.20)`; } catch (e) { /* keep default */ }
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#3d1522'); g.addColorStop(0.75, '#2b1219'); g.addColorStop(1, '#59331f');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    const rg = ctx.createRadialGradient(W / 2, H * 0.42, 40, W / 2, H * 0.42, W * 0.62);
-    rg.addColorStop(0, tint); rg.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#6d4423'; ctx.fillRect(0, H * 0.94, W, H * 0.06);
-    const fg = ctx.createLinearGradient(0, H * 0.8, 0, H);
-    fg.addColorStop(0, 'rgba(40,20,10,0)'); fg.addColorStop(1, 'rgba(40,20,10,0.55)');
-    ctx.fillStyle = fg; ctx.fillRect(0, H * 0.8, W, H * 0.2);
-  } else {
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#3d1522'); g.addColorStop(0.75, '#2b1219'); g.addColorStop(1, '#59331f');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#6d4423'; ctx.fillRect(0, H * 0.94, W, H * 0.06);
+    try {
+      const bgc = state.bg.getContext('2d', { willReadFrequently: true });
+      bgc.drawImage(cam, 0, 0, 1, 1);
+      const px = bgc.getImageData(0, 0, 1, 1).data; state.tint = `rgba(${px[0]},${px[1]},${px[2]},0.20)`;
+    } catch (e) { /* keep last */ }
   }
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#3d1522'); g.addColorStop(0.75, '#2b1219'); g.addColorStop(1, '#59331f');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  if (state.mode === 'camera') {
+    const rg = ctx.createRadialGradient(W / 2, H * 0.42, 40, W / 2, H * 0.42, Math.max(W, H) * 0.62);
+    rg.addColorStop(0, state.tint); rg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+  }
+  ctx.fillStyle = '#6d4423'; ctx.fillRect(0, H * 0.94, W, H * 0.06);
+  const fg = ctx.createLinearGradient(0, H * 0.8, 0, H);
+  fg.addColorStop(0, 'rgba(40,20,10,0)'); fg.addColorStop(1, 'rgba(40,20,10,0.55)');
+  ctx.fillStyle = fg; ctx.fillRect(0, H * 0.8, W, H * 0.2);
   drawLead(ts || performance.now());
   if (state.mode !== 'idle' && chkCo.checked) drawCoActors(ts || 0);
-  // honest guidance: camera is on but no body found — say what to do
-  if (state.mode === 'camera' && poseL && !state.pose && performance.now() - lastPoseAt > 2500 && (ts || 0) - noPoseMsgAt > 7000) {
+  // honest guidance: camera is on but nobody is found
+  if (state.mode === 'camera' && poseL && !state.pose && !state.face && performance.now() - lastPoseAt > 3000 && (ts || 0) - noPoseMsgAt > 8000) {
     noPoseMsgAt = ts || 0;
-    setMsg('I can\'t see your body yet — hold the phone further back so your shoulders and waist are in frame. (Face-only works too: your face alone drives the head, mouth and blinks.)');
+    setMsg('I can\'t see you yet — face the phone in good light. Step back so your shoulders show to unlock gestures.');
   }
-  if (captionInput.value.trim()) {
-    const txt = captionInput.value.trim();
-    ctx.save(); ctx.font = `700 ${Math.round(H * 0.045)}px 'Space Grotesk', sans-serif`;
-    ctx.textAlign = 'center';
-    const tw = ctx.measureText(txt).width + 44, th = H * 0.075;
-    ctx.fillStyle = 'rgba(20,8,10,0.72)';
-    roundRectPath(W / 2 - tw / 2, H - th - H * 0.035, tw, th, 14); ctx.fill();
-    ctx.fillStyle = '#ffe9b8'; ctx.textBaseline = 'middle';
-    ctx.fillText(txt, W / 2, H - th / 2 - H * 0.035); ctx.restore();
+  const cap = captionInput.value.trim();
+  if (cap) {
+    ctx.save(); const fsz = Math.round(Math.min(W, H) * 0.052);
+    ctx.font = `700 ${fsz}px 'Space Grotesk', system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const lines = wrapLines(cap, W * 0.84), lh = fsz * 1.25;
+    const tw = Math.max(...lines.map(l => ctx.measureText(l).width)) + fsz * 1.4, th = lines.length * lh + fsz * 0.7;
+    const y0 = H - th - H * 0.035;
+    ctx.fillStyle = 'rgba(20,8,10,0.74)'; roundRectPath(W / 2 - tw / 2, y0, tw, th, 14); ctx.fill();
+    ctx.fillStyle = '#ffe9b8';
+    lines.forEach((l, i) => ctx.fillText(l, W / 2, y0 + fsz * 0.35 + lh * (i + 0.5)));
+    ctx.restore();
   }
   if (state.recording) {
     const s = Math.floor((Date.now() - state.recStart) / 1000);
-    btnRec.textContent = `■ ${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')} — Stop & Save`;
+    btnRec.textContent = `■ Stop · ${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
   }
   if (msgEl.textContent && performance.now() - state.msgAt > 7000) msgEl.style.opacity = '0';
   dotPose.classList.toggle('on', !!state.pose);
   dotHand.classList.toggle('on', state.hands.length > 0);
   dotFace.classList.toggle('on', !!state.face);
-  fpsFrames++;
-  if (ts - fpsLast > 1000) { fpsEl.textContent = Math.round(fpsEMA) + ' fps'; fpsFrames = 0; fpsLast = ts; }
+  if (ts - fpsLast > 1000) { fpsEl.textContent = Math.round(fpsEMA) + ' fps'; fpsLast = ts; }
   // auto-quality: if the stage struggles, shed load tier by tier and say so
-  if (state.mode === 'camera' && fpsEMA < 17 && state.quality !== 'performance') {
+  if (state.mode === 'camera' && poseL && fpsEMA < 17 && state.quality !== 'performance') {
     if (!state.lowFpsSince) state.lowFpsSince = ts;
     if (ts - state.lowFpsSince > 5000) {
       state.quality = state.quality === 'high' ? 'balanced' : 'performance';
-      selQuality.value = state.quality; state.autoBalanced = true; state.lowFpsSince = 0;
-      statusModel.textContent = 'Models: ready ✅ (auto-' + state.quality + ' for smoothness)';
+      selQuality.value = state.quality; state.lowFpsSince = 0;
+      statusModel.textContent = 'Tracker: live ✅ (auto-' + state.quality + ')';
     }
   } else state.lowFpsSince = 0;
 }
 
 /* ---------- controls ---------- */
+function cameraErrorText(e) {
+  const n = e && e.name;
+  if (n === 'NotAllowedError' || n === 'SecurityError') return 'Camera permission was blocked. Allow the camera for this site in your browser settings, then tap Start Camera again.';
+  if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'No front camera was found on this device. Demo Mode still works.';
+  if (n === 'NotReadableError' || n === 'AbortError') return 'The camera is busy in another app. Close it and tap Start Camera again.';
+  return 'The camera could not start (' + ((e && e.message) || n || 'unknown') + '). Try again, or use Demo Mode.';
+}
+async function openCamera() {
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    const err = new Error('the camera needs an https:// address'); err.name = 'SecurityError'; throw err;
+  }
+  const video = { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30, max: 30 } };
+  const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+  try { return { stream: await navigator.mediaDevices.getUserMedia({ video, audio }), mic: true }; }
+  catch (e) {
+    if (e && (e.name === 'NotAllowedError' || e.name === 'NotFoundError' || e.name === 'NotReadableError')) {
+      // mic refused or missing: perform anyway, the film is silent
+      return { stream: await navigator.mediaDevices.getUserMedia({ video, audio: false }), mic: false };
+    }
+    throw e;
+  }
+}
+async function keepAwake() {
+  try { if ('wakeLock' in navigator && !state.wakeLock) { state.wakeLock = await navigator.wakeLock.request('screen'); state.wakeLock.addEventListener('release', () => { state.wakeLock = null; }); } } catch (e) { /* optional */ }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.mode === 'camera') keepAwake();
+  if (document.visibilityState === 'hidden' && state.recording) state.recorder.stop(); // a backgrounded tab stops drawing frames
+});
 btnCam.addEventListener('click', async () => {
+  if (state.mode === 'camera') return;
+  btnCam.disabled = true;
+  // the camera is asked for first, inside the tap (iOS requires the gesture),
+  // and the tracker downloads in parallel — you are on stage at once
+  const models = initModels();
+  models.catch(() => {});
+  let mic = false;
   try {
-    if (!poseL) await initModels();
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: true });
-    cam.srcObject = stream; await cam.play();
-    state.stream = stream; state.mode = 'camera';
-    btnCam.textContent = '📷 Camera On ✅'; btnDemo.textContent = '🪄 Demo Mode'; btnRec.disabled = false;
-    setMsg('You are live — and fully replaced. Look around, talk, laugh, dance: the character does it all with you.');
+    const r = await openCamera(); mic = r.mic;
+    cam.srcObject = r.stream; cam.muted = true; cam.setAttribute('playsinline', ''); await cam.play();
+    if (state.stream) state.stream.getTracks().forEach(t => t.stop());
+    state.stream = r.stream; state.mode = 'camera'; raw.pose = null; raw.face = null; raw.hands = [];
+    state.figInit = false;
+    btnCam.textContent = '📷 Camera on'; btnCam.hidden = true; btnDemo.textContent = '🪄 Demo'; btnRec.disabled = false;
+    keepAwake();
+    if (!poseL) setMsg(mic ? 'Camera on. The tracker is warming up — a few seconds on first visit.' : 'Camera on (no microphone — your film will be silent). Tracker warming up…');
   } catch (e) {
-    statusModel.textContent = 'Models: failed to load — check connection, tap Start Camera to retry';
-    poseL = null;
-    setMsg('Something blocked the stage: ' + e.message + ' — try again, or use Demo Mode.');
+    btnCam.disabled = false;
+    setMsg(cameraErrorText(e));
+    return;
+  }
+  try {
+    await models;
+    setMsg(mic ? 'You are live. Talk, blink, wave, point, open your arms — the character performs with you.' : 'You are live (silent film — the microphone is off).');
+  } catch (e) {
+    statusModel.textContent = 'Tracker failed to load — tap Start Camera to retry';
+    setMsg('The tracker could not download (' + (e.message || 'network') + '). Check your connection and tap Start Camera.');
+    btnCam.disabled = false; btnCam.hidden = false; btnCam.textContent = '📷 Retry tracker';
+    state.mode = 'idle'; btnRec.disabled = true;
+    if (state.stream) { state.stream.getTracks().forEach(t => t.stop()); state.stream = null; }
+    return;
   }
 });
 btnDemo.addEventListener('click', () => {
+  if (state.recording) return;
+  if (state.mode === 'camera') return setMsg('Demo Mode is for when there is no camera — you are already live.');
   state.mode = state.mode === 'demo' ? 'idle' : 'demo';
-  btnDemo.textContent = state.mode === 'demo' ? '🪄 Stop Demo' : '🪄 Demo Mode';
+  btnDemo.textContent = state.mode === 'demo' ? '🪄 Stop demo' : '🪄 Demo';
   btnRec.disabled = state.mode === 'idle';
-  setMsg(state.mode === 'demo' ? 'Demo Mode: a virtual performer drives the lead — watch it wave and look around. (The real magic needs your camera.)' : '');
+  if (state.mode === 'demo' && chkCo.checked) { ensurePack(cast.leftHand).catch(() => {}); ensurePack(cast.rightHand).catch(() => {}); }
+  if (state.mode === 'idle') { raw.pose = null; raw.face = null; raw.hands = []; }
+  setMsg(state.mode === 'demo' ? 'Demo Mode: a virtual performer waves, points and opens its arms. The real thing needs your camera.' : '');
 });
-selQuality.addEventListener('change', () => { state.quality = selQuality.value; state.autoBalanced = false; });
+selQuality.addEventListener('change', () => { state.quality = selQuality.value; });
+function setReel(on) {
+  state.reel = on;
+  stage.classList.toggle('reel', on);
+  document.body.classList.toggle('reel-mode', on);
+  btnReel.textContent = on ? '🖥 16:9' : '📱 9:16';
+  btnReel.setAttribute('aria-pressed', on ? 'true' : 'false');
+}
 btnReel.addEventListener('click', () => {
-  state.reel = !state.reel;
-  stage.classList.toggle('reel', state.reel);
-  btnReel.textContent = state.reel ? '🖥 16:9 Stage Mode' : '📱 9:16 Reel Mode';
+  if (state.recording) return setMsg('Stop recording before changing the frame — a film keeps one shape.');
+  setReel(!state.reel);
 });
 
+/* ---------- recording ----------
+   MP4 first (iPhone Safari only records MP4; Chrome 126+ records it too, and
+   it is what WhatsApp/Instagram accept), WebM as the fallback — with its
+   duration written into the header, since MediaRecorder WebM files have none
+   and many players then cannot seek them. */
+const REC_TYPES = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a', 'video/mp4;codecs=avc1,opus', 'video/mp4',
+  'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+function pickRecType() {
+  if (typeof MediaRecorder === 'undefined') return null;
+  for (const t of REC_TYPES) { try { if (MediaRecorder.isTypeSupported(t)) return t; } catch (e) { /* ignore */ } }
+  return '';
+}
+/* Writes a Duration element into a MediaRecorder WebM (Segment of unknown
+   size, Info without Duration — what Chrome and Firefox emit). Returns the
+   input untouched if the file does not look like that. */
+async function fixWebmDuration(blob, ms) {
+  try {
+    const head = new Uint8Array(await blob.slice(0, Math.min(blob.size, 65536)).arrayBuffer());
+    const vlen = b => { let l = 1, m = 0x80; while (l <= 8 && !(b & m)) { l++; m >>= 1; } return l; };
+    const readVint = (o) => { const l = vlen(head[o]); const mask = (0x80 >> (l - 1)) - 1; let v = head[o] & mask, ones = (head[o] & mask) === mask; for (let i = 1; i < l; i++) { v = v * 256 + head[o + i]; ones = ones && head[o + i] === 0xFF; } return { l, v, unknown: ones }; };
+    const idLen = b => vlen(b);
+    let o = 0;
+    // EBML header
+    if (head[0] !== 0x1A || head[1] !== 0x45 || head[2] !== 0xDF || head[3] !== 0xA3) return blob;
+    o = 4; let sz = readVint(o); o += sz.l + sz.v;
+    // Segment
+    if (!(head[o] === 0x18 && head[o + 1] === 0x53 && head[o + 2] === 0x80 && head[o + 3] === 0x67)) return blob;
+    o += 4; sz = readVint(o); if (!sz.unknown) return blob; o += sz.l;
+    // walk segment children until Info
+    while (o < head.length - 12) {
+      const il = idLen(head[o]); const id = Array.from(head.slice(o, o + il)).map(b => b.toString(16).padStart(2, '0')).join('');
+      const s = readVint(o + il);
+      if (id === '1549a966') {
+        const infoStart = o, bodyStart = o + il + s.l, bodyEnd = bodyStart + s.v;
+        // already has Duration (0x4489)?
+        for (let p = bodyStart; p < bodyEnd;) { const cl = idLen(head[p]); if (cl === 2 && head[p] === 0x44 && head[p + 1] === 0x89) return blob; const cs = readVint(p + cl); p += cl + cs.l + cs.v; }
+        // TimecodeScale (0x2AD7B1) defaults to 1 ms
+        let scale = 1e6;
+        for (let p = bodyStart; p < bodyEnd;) { const cl = idLen(head[p]); const cs = readVint(p + cl); if (cl === 3 && head[p] === 0x2A && head[p + 1] === 0xD7 && head[p + 2] === 0xB1) { let v = 0; for (let i = 0; i < cs.v; i++) v = v * 256 + head[p + cl + cs.l + i]; scale = v; } p += cl + cs.l + cs.v; }
+        const dur = new Uint8Array(11); dur[0] = 0x44; dur[1] = 0x89; dur[2] = 0x88;
+        new DataView(dur.buffer).setFloat64(3, ms * 1e6 / scale);
+        const body = head.slice(bodyStart, bodyEnd);
+        const newSize = body.length + dur.length;
+        const sizeV = new Uint8Array(8); sizeV[0] = 0x01; let v = newSize; for (let i = 7; i >= 1; i--) { sizeV[i] = v & 0xff; v = Math.floor(v / 256); }
+        const info = new Blob([head.slice(infoStart, infoStart + il), sizeV, body, dur]);
+        return new Blob([blob.slice(0, infoStart), info, blob.slice(bodyEnd)], { type: blob.type });
+      }
+      if (s.unknown) return blob;
+      o += il + s.l + s.v;
+    }
+  } catch (e) { /* leave the file as recorded */ }
+  return blob;
+}
+function stamp() { const d = new Date(), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
 btnRec.addEventListener('click', () => {
   if (state.recording) { state.recorder.stop(); return; }
   if (state.mode === 'idle') { setMsg('Start the camera or Demo Mode first — then record your scene.'); return; }
+  const mime = pickRecType();
+  if (mime === null || !stage.captureStream) { setMsg('This browser cannot record video. Try Chrome on Android or Safari on iPhone (iOS 14.3+).'); return; }
   try {
     const canvasStream = stage.captureStream(30);
     const tracks = [...canvasStream.getVideoTracks()];
-    if (state.stream && state.stream.getAudioTracks().length) tracks.push(state.stream.getAudioTracks()[0]);
-    const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', '']
-      .find(m => m === '' || MediaRecorder.isTypeSupported(m));
-    const rec = new MediaRecorder(new MediaStream(tracks), mime ? { mimeType: mime } : undefined);
+    if (state.mode === 'camera' && state.stream && state.stream.getAudioTracks().length) tracks.push(state.stream.getAudioTracks()[0]);
+    const rec = new MediaRecorder(new MediaStream(tracks), Object.assign(mime ? { mimeType: mime } : {}, { videoBitsPerSecond: 4_000_000 }));
     state.chunks = [];
-    rec.ondataavailable = e => { if (e.data.size) state.chunks.push(e.data); };
-    rec.onstop = () => {
-      state.recording = false; btnRec.textContent = '⏺ Record Scene';
-      const blob = new Blob(state.chunks, { type: 'video/webm' });
+    rec.ondataavailable = e => { if (e.data && e.data.size) state.chunks.push(e.data); };
+    rec.onstop = async () => {
+      const ms = Date.now() - state.recStart;
+      state.recording = false; btnRec.textContent = '⏺ Record again'; btnRec.classList.remove('recording');
+      canvasStream.getTracks().forEach(t => t.stop());
+      const type = (rec.mimeType || mime || 'video/webm').split(';')[0];
+      let blob = new Blob(state.chunks, { type });
+      if (type === 'video/webm') blob = await fixWebmDuration(blob, ms);
+      const ext = type === 'video/mp4' ? 'mp4' : 'webm';
       if (state.recUrl) URL.revokeObjectURL(state.recUrl);
-      state.recUrl = URL.createObjectURL(blob);
-      downloadA.href = state.recUrl; downloadA.hidden = false; btnRetake.hidden = false;
-      setMsg('Scene recorded! Download the film, or act out a retake.');
+      state.recBlob = blob; state.recUrl = URL.createObjectURL(blob);
+      downloadA.href = state.recUrl; downloadA.download = `rangmanch-${stamp()}.${ext}`;
+      downloadA.hidden = false; btnRetake.hidden = false;
+      btnShare.hidden = !(navigator.canShare && navigator.canShare({ files: [new File([blob], downloadA.download, { type })] }));
+      setMsg(`Scene recorded (${Math.round(ms / 1000)} s). Save the film, share it, or act a retake.`);
     };
-    rec.start(250); state.recorder = rec; state.recording = true; state.recStart = Date.now();
-    downloadA.hidden = true; btnRetake.hidden = true;
+    rec.start(1000); state.recorder = rec; state.recording = true; state.recStart = Date.now(); state.recMime = rec.mimeType || mime;
+    btnRec.classList.add('recording');
+    downloadA.hidden = true; btnRetake.hidden = true; btnShare.hidden = true;
     setMsg('Rolling! Lights, camera… act!');
   } catch (e) { setMsg('Recording failed: ' + e.message); }
 });
+btnShare.addEventListener('click', async () => {
+  if (!state.recBlob) return;
+  try { await navigator.share({ files: [new File([state.recBlob], downloadA.download, { type: state.recBlob.type })], title: 'My Rangmanch scene' }); }
+  catch (e) { if (e && e.name !== 'AbortError') setMsg('Sharing failed — use Save instead.'); }
+});
 btnRetake.addEventListener('click', () => {
   if (state.recording) return;
-  downloadA.hidden = true; btnRetake.hidden = true; btnRec.click();
+  downloadA.hidden = true; btnRetake.hidden = true; btnShare.hidden = true; btnRec.click();
 });
 
-/* Debug/testing handle — lets the sandbox harness drive synthetic performers. */
-window.__rangmanch = { version: VERSION, state, raw, cast, packs, ensurePack, classifyGesture, packGeom, stage };
+/* Debug/testing handle — lets the test harness drive synthetic performers. */
+window.__rangmanch = { version: VERSION, state, raw, cast, packs, ensurePack, classifyGesture, packGeom, stage, setLead, setReel, fixWebmDuration, pickRecType, MAP, toPx };
 
-fillCastSelects();
+// phones held upright get the vertical 9:16 stage by default
+setReel(window.matchMedia('(orientation: portrait)').matches && window.innerWidth < 900);
+buildCasting();
+setLead(cast.lead);
 requestAnimationFrame(loop);

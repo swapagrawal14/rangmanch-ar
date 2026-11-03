@@ -6,9 +6,8 @@ import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-let chromium;
-try { ({ chromium } = await import('playwright-core')); }
-catch (e) { const req = createRequire('/home/hatch/workspace/tools/testrig/package.json'); ({ chromium } = req('playwright-core')); }
+import { getChromium, routeMediapipe } from './_rig.mjs';
+const chromium = await getChromium();
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SHOTS = path.join(ROOT, 'tests', 'shots');
 mkdirSync(SHOTS, { recursive: true });
@@ -27,22 +26,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 950 } });
 // sandbox proxy refuses CDN tunnels from Chromium (curl reaches them fine):
 // serve the REAL MediaPipe bundle/WASM/models from a local mirror — same
 // bytes, different transport — so the model pipeline itself is truly tested
-const MIRROR = '/home/hatch/workspace/tools/testrig/mp-mirror';
-const { readFileSync } = await import('node:fs');
-await page.route('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/**', route => {
-  const u = route.request().url();
-  try {
-    if (u.endsWith('vision_bundle.mjs')) return route.fulfill({ contentType: 'text/javascript', body: readFileSync(MIRROR + '/vision_bundle.mjs') });
-    const w = u.match(/wasm\/(.+)$/);
-    if (w) return route.fulfill({ contentType: u.endsWith('.wasm') ? 'application/wasm' : 'text/javascript', body: readFileSync(MIRROR + '/wasm/' + w[1]) });
-  } catch (e) { /* fall through */ }
-  return route.continue();
-});
-await page.route('https://storage.googleapis.com/mediapipe-models/**', route => {
-  const u = route.request().url();
-  const f = u.includes('pose_landmarker') ? 'pose.task' : u.includes('hand_landmarker') ? 'hand.task' : 'face.task';
-  return route.fulfill({ contentType: 'application/octet-stream', body: readFileSync(MIRROR + '/models/' + f) });
-});
+await routeMediapipe(page);
 page.on('console', m => { if (m.type() === 'error') out.errors.push(m.text().slice(0, 200)); });
 page.on('pageerror', e => out.errors.push('pageerror: ' + String(e).slice(0, 200)));
 await page.goto('http://localhost:8903/', { waitUntil: 'networkidle' }).catch(() => {});
@@ -59,7 +43,7 @@ out.checks.geomMs = await page.evaluate(async () => {
 // real models + fake camera
 await page.click('#btn-camera');
 try {
-  await page.waitForFunction(() => document.querySelector('#status-model').textContent.includes('ready'), null, { timeout: 90000 });
+  await page.waitForFunction(() => document.querySelector('#status-model').textContent.includes('live'), null, { timeout: 90000 });
   out.checks.modelsReady = true;
 } catch (e) {
   out.checks.modelsReady = false;
@@ -78,6 +62,7 @@ if (out.checks.modelsReady) {
 
 // mobile layout
 const mob = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+await routeMediapipe(mob);
 mob.on('pageerror', e => out.errors.push('mobile pageerror: ' + String(e).slice(0, 200)));
 await mob.goto('http://localhost:8903/', { waitUntil: 'networkidle' }).catch(() => {});
 await mob.waitForFunction(() => window.__rangmanch && window.__rangmanch.packs.swapnil && window.__rangmanch.packs.swapnil.poses.wave, null, { timeout: 30000 }).catch(() => {});

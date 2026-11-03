@@ -100,11 +100,15 @@ main { max-width: 1120px; margin: 0 auto; padding: 22px 20px 8px; }
 .curtain-side.left { left: 0; box-shadow: 6px 0 12px rgba(0,0,0,.45); }
 .curtain-side.right { right: 0; box-shadow: -6px 0 12px rgba(0,0,0,.45); }
 canvas#stage {
-  width: 100%; height: auto; display: block; position: relative; z-index: 1;
+  /* both sizes auto + max limits = the canvas keeps its own aspect and never
+     outgrows the screen (9:16 on a phone fills the height, 16:9 the width) */
+  width: auto; height: auto; max-width: 100%;
+  max-height: calc(100vh - 230px); max-height: calc(100svh - 230px);
+  display: block; position: relative; z-index: 1;
   background: #241016; border-radius: 4px; margin: 0 auto;
 }
-canvas#stage.reel { max-width: 430px; }
-video#cam { display: none; }
+/* iOS Safari stops decoding a display:none <video> — keep it rendered, invisible */
+video#cam { position: fixed; left: 0; top: 0; width: 2px; height: 2px; opacity: 0; pointer-events: none; z-index: -1; }
 .stage-msg {
   position: absolute; z-index: 4; left: 50%; bottom: 52px; transform: translateX(-50%);
   background: rgba(20,11,4,.88); color: var(--cream);
@@ -123,8 +127,26 @@ video#cam { display: none; }
 
 /* ---------- Director console ---------- */
 .console { margin: 20px 0 6px; }
+.console-tools { margin: 0 0 6px; }
 .console-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
 .console-row.tools { margin-top: 14px; }
+.tool.check { flex-direction: row; align-items: center; gap: 8px; padding: 10px 4px; cursor: pointer; }
+.tool.check input { width: 20px; height: 20px; accent-color: var(--gold); }
+.btn-record.recording { min-width: 150px; justify-content: center; }
+/* ---------- Lead picker ---------- */
+.lead-strip {
+  display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 12px; margin-bottom: 14px;
+  scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain;
+}
+.lead-pick {
+  flex: none; width: 92px; scroll-snap-align: start; cursor: pointer;
+  background: var(--cream); color: var(--ink); border: 2.5px solid var(--ink); border-radius: 12px;
+  box-shadow: 0 4px 0 var(--ink); padding: 6px 6px 8px; font: 700 12.5px "Space Grotesk", system-ui, sans-serif;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.lead-pick img { width: 72px; height: 88px; object-fit: contain; display: block; }
+.lead-pick span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.lead-pick[aria-pressed="true"] { background: var(--gold); box-shadow: 0 4px 0 var(--red-deep); border-color: var(--red-deep); }
 .tool { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--cream-dim); }
 .tool.grow { flex: 1; min-width: 220px; }
 .tool select, .tool input {
@@ -160,7 +182,7 @@ video#cam { display: none; }
   display: flex; align-items: center; gap: 14px; margin: 0 0 14px; color: var(--cream);
 }
 .h2-rule { flex: 1; height: 2px; background: linear-gradient(90deg, transparent, var(--gold), transparent); }
-.cast-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.cast-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
 .cast-card {
   background: var(--cream); color: var(--ink); border-radius: 12px;
   border: 2.5px solid var(--ink); box-shadow: 0 5px 0 var(--ink);
@@ -207,10 +229,39 @@ footer {
 footer .sep { color: var(--gold); margin: 0 10px; }
 
 @media (max-width: 760px) {
+  /* phone: the stage IS the app — compact marquee, stage fills the screen,
+     record controls pinned to the bottom edge */
+  .bulbs, .tagline, .hand-note, .kicker, .stage-board { display: none; }
+  .marquee { border-bottom-width: 3px; }
+  .marquee-inner { padding: 8px 12px; padding-top: max(8px, env(safe-area-inset-top)); flex-wrap: nowrap; align-items: center; gap: 10px; }
+  h1 { font-size: 18px; margin: 0; white-space: nowrap; flex: none; }
+  .title-block { flex: none; }
+  .status-block { text-align: right; padding-top: 0; min-width: 0; flex: 1 1 auto; overflow: hidden; }
+  .ticket { font-size: 11px; padding: 3px 8px; border-width: 1.5px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: none; }
+  .trackers { margin-top: 4px; font-size: 10px; letter-spacing: 0; white-space: nowrap; }
+  .t-item { margin-left: 6px; }
+  .dot { width: 8px; height: 8px; margin-right: 4px; }
+  .fps { display: none; }
+  main { padding: 8px 8px 0; }
+  .stage-frame { padding: 14px 10px 10px; border-radius: 10px; }
+  .curtain-top { height: 14px; background-size: 20px 14px, 100% 100%; border-bottom-width: 2px; }
+  .curtain-side { width: 10px; }
+  canvas#stage { max-height: calc(100vh - 200px); max-height: calc(100svh - 200px); }
+  .stage-msg { bottom: 18px; max-width: 92%; border-radius: 14px; font-size: 12.5px; padding: 6px 12px; }
+  .console { margin: 0; position: sticky; bottom: 0; z-index: 10; padding: 8px 2px; padding-bottom: max(8px, env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, rgba(23,16,11,0), var(--stage-bg) 22%); }
+  .console-row { gap: 8px; }
+  .console-row.primary .btn { flex: 1 1 0; justify-content: center; padding: 12px 8px; font-size: 15px; min-height: 48px; white-space: nowrap; }
+  #btn-retake { display: none; } /* Record again is the retake on a phone; keeps the bar to three buttons */
+  .console-row.tools { margin-top: 4px; }
+  .btn.small { padding: 9px 12px; font-size: 13.5px; }
+  .tool { font-size: 10.5px; }
+  .tool select, .tool input { font-size: 16px; padding: 8px 10px; } /* 16px stops iOS zoom-on-focus */
+  .tool.grow { min-width: 100%; }
   .cast-grid, .acts { grid-template-columns: 1fr; }
-  .status-block { text-align: left; }
-  .stage-frame { padding: 26px 18px 0; }
-  .curtain-side { width: 18px; }
-  .stage-board { margin: 0 -18px; font-size: 11px; }
-  .stage-msg { bottom: 12px; max-width: 94%; border-radius: 14px; font-size: 12px; padding: 6px 12px; }
+  .casting h2, .playbill h2 { font-size: 21px; }
+  .playbill { padding: 16px 14px 14px; }
+}
+@media (max-width: 760px) and (orientation: landscape) {
+  canvas#stage { max-height: calc(100vh - 120px); max-height: calc(100svh - 120px); }
 }
