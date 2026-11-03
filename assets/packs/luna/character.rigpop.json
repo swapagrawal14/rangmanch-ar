@@ -1,0 +1,62 @@
+{
+  "spec": 1,
+  "id": "luna",
+  "name": "Luna the Moth Girl",
+  "author": "Swapnil Agrawal",
+  "license": "MIT",
+  "talk": {
+    "canvas": {
+      "w": 720,
+      "h": 936
+    },
+    "base": "talk/base.png",
+    "files": {
+      "A": "talk/A.png",
+      "O": "talk/O.png",
+      "E": "talk/E.png",
+      "blink": "talk/blink.png"
+    },
+    "patches": {
+      "A": {
+        "x": 331,
+        "y": 370,
+        "w": 56,
+        "h": 42
+      },
+      "O": {
+        "x": 331,
+        "y": 370,
+        "w": 56,
+        "h": 42
+      },
+      "E": {
+        "x": 331,
+        "y": 370,
+        "w": 56,
+        "h": 42
+      },
+      "blink": {
+        "x": 291,
+        "y": 328,
+        "w": 130,
+        "h": 30
+      }
+    },
+    "poses": {
+      "wave": "talk/pose_wave.png",
+      "point": "talk/pose_point.png",
+      "open": "talk/pose_open.png",
+      "thumbs": "talk/pose_thumbs.png"
+    }
+  },
+  "voice": {
+    "engine": "edge-tts",
+    "id": "en-GB-SoniaNeural",
+    "preset": "sonia"
+  },
+  "style": {
+    "bible": "creepy-cute pastel, moth antennae, wing cape, crescent brooch, tiny fangs",
+    "palette": [],
+    "outfit": ""
+  }
+}

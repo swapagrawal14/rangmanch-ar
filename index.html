@@ -45,10 +45,25 @@
   </section>
 
   <section class="console" aria-label="Director console">
-    <button id="btn-camera" class="btn btn-gold">📷&nbsp; Camera Chalu</button>
-    <button id="btn-demo" class="btn btn-ghost">🪄&nbsp; Demo Mode</button>
-    <button id="btn-record" class="btn btn-record" disabled>⏺&nbsp; Record Scene</button>
-    <a id="download" class="btn btn-download" hidden>⬇&nbsp; Film Download Karo</a>
+    <div class="console-row">
+      <button id="btn-camera" class="btn btn-gold">📷&nbsp; Camera Chalu</button>
+      <button id="btn-demo" class="btn btn-ghost">🪄&nbsp; Demo Mode</button>
+      <button id="btn-record" class="btn btn-record" disabled>⏺&nbsp; Record Scene</button>
+      <a id="download" class="btn btn-download" hidden>⬇&nbsp; Film Download Karo</a>
+      <button id="btn-retake" class="btn btn-ghost" hidden>↩&nbsp; Retake</button>
+    </div>
+    <div class="console-row tools">
+      <label class="tool">Quality
+        <select id="quality">
+          <option value="high" selected>High — teeno models tez</option>
+          <option value="balanced">Balanced — halke phone ke liye</option>
+        </select>
+      </label>
+      <button id="btn-reel" class="btn btn-ghost small">📱&nbsp; 9:16 Reel Mode</button>
+      <label class="tool grow">Caption — film pe yahi line dikhegi
+        <input id="caption-input" type="text" maxlength="90" placeholder="e.g. Germ: Aaj toh brush se haar gaya!">
+      </label>
+    </div>
   </section>
 
   <section class="casting" aria-label="Casting">
@@ -91,7 +106,7 @@
 </main>
 
 <footer>
-  <span>Rangmanch AR · v0.2</span><span class="sep">✦</span>
+  <span>Rangmanch AR · v0.3</span><span class="sep">✦</span>
   <span>Characters: Rigpop Forge packs</span><span class="sep">✦</span>
   <span>Tracking: MediaPipe, on-device</span><span class="sep">✦</span>
   <span>Build Your First AI App 2026</span>

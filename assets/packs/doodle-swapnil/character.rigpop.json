@@ -1,0 +1,66 @@
+{
+  "spec": 1,
+  "id": "kdswapnil",
+  "name": "Doodle Swapnil",
+  "author": "Swapnil Agrawal",
+  "license": "MIT",
+  "talk": {
+    "canvas": {
+      "w": 720,
+      "h": 936
+    },
+    "base": "talk/base.png",
+    "files": {
+      "A": "talk/A.png",
+      "O": "talk/O.png",
+      "E": "talk/E.png",
+      "blink": "talk/blink.png"
+    },
+    "patches": {
+      "A": {
+        "x": 322,
+        "y": 204,
+        "w": 79,
+        "h": 79
+      },
+      "O": {
+        "x": 326,
+        "y": 212,
+        "w": 74,
+        "h": 58
+      },
+      "E": {
+        "x": 311,
+        "y": 205,
+        "w": 102,
+        "h": 64
+      },
+      "blink": {
+        "x": 284,
+        "y": 149,
+        "w": 153,
+        "h": 53
+      }
+    },
+    "poses": {
+      "wave": "talk/pose_wave.png",
+      "point": "talk/pose_point.png",
+      "open": "talk/pose_open.png",
+      "thumbs": "talk/pose_thumbs.png"
+    }
+  },
+  "voice": {
+    "engine": "edge-tts",
+    "id": "en-IN-NeerjaExpressiveNeural"
+  },
+  "style": {
+    "bible": "soft Korean doodle, bold black outlines, big round eyes, pink tulip accent, hot pink + sunny yellow palette",
+    "palette": ["#ff4d8d", "#ffd23f"],
+    "outfit": "doctor's scrubs"
+  },
+  "forgedFrom": {
+    "app": "rigpop-talk",
+    "id": "kdswapnil",
+    "importedAt": "2026-11-02"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "spec": 1,
+  "id": "solana",
+  "name": "Solana the Sun-Chaser",
+  "author": "Swapnil Agrawal",
+  "license": "MIT",
+  "talk": {
+    "canvas": {
+      "w": 720,
+      "h": 936
+    },
+    "base": "talk/base.png",
+    "files": {
+      "A": "talk/A.png",
+      "O": "talk/O.png",
+      "E": "talk/E.png",
+      "blink": "talk/blink.png"
+    },
+    "patches": {
+      "A": {
+        "x": 337,
+        "y": 159,
+        "w": 46,
+        "h": 34
+      },
+      "O": {
+        "x": 337,
+        "y": 159,
+        "w": 46,
+        "h": 34
+      },
+      "E": {
+        "x": 337,
+        "y": 159,
+        "w": 46,
+        "h": 34
+      },
+      "blink": {
+        "x": 305,
+        "y": 122,
+        "w": 110,
+        "h": 26
+      }
+    },
+    "poses": {
+      "wave": "talk/pose_wave.png",
+      "point": "talk/pose_point.png",
+      "open": "talk/pose_open.png",
+      "thumbs": "talk/pose_thumbs.png"
+    }
+  },
+  "voice": {
+    "engine": "edge-tts",
+    "id": "en-GB-SoniaNeural",
+    "preset": "sonia"
+  },
+  "style": {
+    "bible": "flat gouache poster style, long black hair, cobalt statement earrings, cream dress, vermilion accents",
+    "palette": [],
+    "outfit": ""
+  }
+}

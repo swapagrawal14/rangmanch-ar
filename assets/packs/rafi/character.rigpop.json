@@ -1,0 +1,62 @@
+{
+  "spec": 1,
+  "id": "rafi",
+  "name": "Rafi the Rickshaw Poet",
+  "author": "Swapnil Agrawal",
+  "license": "MIT",
+  "talk": {
+    "canvas": {
+      "w": 720,
+      "h": 936
+    },
+    "base": "talk/base.png",
+    "files": {
+      "A": "talk/A.png",
+      "O": "talk/O.png",
+      "E": "talk/E.png",
+      "blink": "talk/blink.png"
+    },
+    "patches": {
+      "A": {
+        "x": 329,
+        "y": 248,
+        "w": 52,
+        "h": 38
+      },
+      "O": {
+        "x": 329,
+        "y": 248,
+        "w": 52,
+        "h": 38
+      },
+      "E": {
+        "x": 329,
+        "y": 248,
+        "w": 52,
+        "h": 38
+      },
+      "blink": {
+        "x": 296,
+        "y": 205,
+        "w": 120,
+        "h": 28
+      }
+    },
+    "poses": {
+      "wave": "talk/pose_wave.png",
+      "point": "talk/pose_point.png",
+      "open": "talk/pose_open.png",
+      "thumbs": "talk/pose_thumbs.png"
+    }
+  },
+  "voice": {
+    "engine": "edge-tts",
+    "id": "en-US-AndrewMultilingualNeural",
+    "preset": "andrew"
+  },
+  "style": {
+    "bible": "flat gouache poster style, curly afro, mustard kurta colours, teal trousers",
+    "palette": [],
+    "outfit": ""
+  }
+}

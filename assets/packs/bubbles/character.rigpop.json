@@ -1,0 +1,62 @@
+{
+  "spec": 1,
+  "id": "bubbles",
+  "name": "Bubbles the Fishbowl Girl",
+  "author": "Swapnil Agrawal",
+  "license": "MIT",
+  "talk": {
+    "canvas": {
+      "w": 720,
+      "h": 936
+    },
+    "base": "talk/base.png",
+    "files": {
+      "A": "talk/A.png",
+      "O": "talk/O.png",
+      "E": "talk/E.png",
+      "blink": "talk/blink.png"
+    },
+    "patches": {
+      "A": {
+        "x": 303,
+        "y": 285,
+        "w": 92,
+        "h": 70
+      },
+      "O": {
+        "x": 303,
+        "y": 285,
+        "w": 92,
+        "h": 70
+      },
+      "E": {
+        "x": 303,
+        "y": 285,
+        "w": 92,
+        "h": 70
+      },
+      "blink": {
+        "x": 260,
+        "y": 242,
+        "w": 190,
+        "h": 44
+      }
+    },
+    "poses": {
+      "wave": "talk/pose_wave.png",
+      "point": "talk/pose_point.png",
+      "open": "talk/pose_open.png",
+      "thumbs": "talk/pose_thumbs.png"
+    }
+  },
+  "voice": {
+    "engine": "edge-tts",
+    "id": "en-US-AvaMultilingualNeural",
+    "preset": "ava"
+  },
+  "style": {
+    "bible": "soft storybook watercolour, fishbowl head with a goldfish inside, sailor dress",
+    "palette": [],
+    "outfit": ""
+  }
+}

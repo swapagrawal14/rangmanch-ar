@@ -62,6 +62,12 @@ Camera + Mic (getUserMedia)
 | 3 — Film finish | 18–24 Nov | Per-character voice pitch on playback takes, captions burned in, 9:16 reel framing mode, demo reel production ("Germ vs Toothbrush") |
 | Buffer / submit | 25–27 Nov | Devpost write-up (problem, build, disclosures), 2–4 min demo video, public GitHub repo, freeze |
 
+## Progress log
+
+- **v0.2 (3 Nov):** theatre-grade UI redesign after Swapnil's feedback that v0.1 looked like a generic AI template — marquee header with bulbs, curtain-framed stage, director-console buttons, casting cards with real pack-art thumbnails, playbill Director's Notes. Pushed 3e7198b.
+- **v0.3 (3 Nov):** all 16 Forge packs bundled + lazy loading, landmark smoothing, quality toggle (High/Balanced inference staggering), 9:16 reel mode, live captions burned into recordings, record timer + retake. README rebuilt with visuals generated from real pack art (hero, 16-cast lineup, pose strip, face strip).
+- Remaining known gap: per-character voice pitch (live mic is recorded as-is in v0.3) and the on-device camera test, which is Swapnil's to run from the Vercel/Pages link.
+
 ## v0.1 status (3 Nov 2026)
 
 Static web app in this folder (`index.html`, `app.js`, `styles.css`), zero build step:

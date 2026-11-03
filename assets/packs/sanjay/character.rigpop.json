@@ -1,0 +1,114 @@
+{
+  "spec": 1,
+  "id": "sanjay",
+  "name": "Dr Sanjay Agrawal",
+  "author": "Swapnil Agrawal",
+  "license": "MIT",
+  "talk": {
+    "canvas": {
+      "w": 720,
+      "h": 936
+    },
+    "base": "talk/base.png",
+    "files": {
+      "A": "talk/A.png",
+      "O": "talk/O.png",
+      "E": "talk/E.png",
+      "blink": "talk/blink.png"
+    },
+    "patches": {
+      "A": {
+        "x": 331,
+        "y": 250,
+        "w": 56,
+        "h": 40
+      },
+      "O": {
+        "x": 331,
+        "y": 250,
+        "w": 56,
+        "h": 40
+      },
+      "E": {
+        "x": 331,
+        "y": 250,
+        "w": 56,
+        "h": 40
+      },
+      "blink": {
+        "x": 294,
+        "y": 178,
+        "w": 130,
+        "h": 28
+      }
+    },
+    "poses": {
+      "wave": "talk/pose_wave.png",
+      "point": "talk/pose_point.png",
+      "open": "talk/pose_open.png",
+      "thumbs": "talk/pose_thumbs.png"
+    },
+    "poseAnchors": {
+      "base": {
+        "mouth": [
+          359,
+          267
+        ],
+        "eyes": [
+          359,
+          185
+        ]
+      },
+      "wave": {
+        "mouth": [
+          386,
+          273
+        ],
+        "eyes": [
+          382,
+          192
+        ]
+      },
+      "point": {
+        "mouth": [
+          188,
+          278
+        ],
+        "eyes": [
+          170,
+          181
+        ]
+      },
+      "open": {
+        "mouth": [
+          389,
+          269
+        ],
+        "eyes": [
+          387,
+          182
+        ]
+      },
+      "thumbs": {
+        "mouth": [
+          381,
+          279
+        ],
+        "eyes": [
+          379,
+          192
+        ]
+      }
+    }
+  },
+  "voice": {
+    "engine": "edge-tts",
+    "id": "en-IN-PrabhatNeural",
+    "preset": "prabhat"
+  },
+  "style": {
+    "bible": "bold marker illustration, cobalt-blue outlines, cream dotted kurta, tilak, the father",
+    "palette": [],
+    "outfit": ""
+  }
+}

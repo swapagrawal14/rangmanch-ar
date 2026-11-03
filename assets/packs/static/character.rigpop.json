@@ -1,0 +1,62 @@
+{
+  "spec": 1,
+  "id": "static",
+  "name": "Static the TV Kid",
+  "author": "Swapnil Agrawal",
+  "license": "MIT",
+  "talk": {
+    "canvas": {
+      "w": 720,
+      "h": 936
+    },
+    "base": "talk/base.png",
+    "files": {
+      "A": "talk/A.png",
+      "O": "talk/O.png",
+      "E": "talk/E.png",
+      "blink": "talk/blink.png"
+    },
+    "patches": {
+      "A": {
+        "x": 345,
+        "y": 270,
+        "w": 84,
+        "h": 60
+      },
+      "O": {
+        "x": 345,
+        "y": 270,
+        "w": 84,
+        "h": 60
+      },
+      "E": {
+        "x": 345,
+        "y": 270,
+        "w": 84,
+        "h": 60
+      },
+      "blink": {
+        "x": 313,
+        "y": 224,
+        "w": 150,
+        "h": 40
+      }
+    },
+    "poses": {
+      "wave": "talk/pose_wave.png",
+      "point": "talk/pose_point.png",
+      "open": "talk/pose_open.png",
+      "thumbs": "talk/pose_thumbs.png"
+    }
+  },
+  "voice": {
+    "engine": "edge-tts",
+    "id": "en-US-AndrewMultilingualNeural",
+    "preset": "andrew"
+  },
+  "style": {
+    "bible": "retro cartoon, CRT television head with a glowing emoticon screen, mustard hoodie",
+    "palette": [],
+    "outfit": ""
+  }
+}

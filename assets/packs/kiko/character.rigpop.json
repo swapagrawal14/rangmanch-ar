@@ -1,0 +1,62 @@
+{
+  "spec": 1,
+  "id": "kiko",
+  "name": "Kiko the Cloud Shepherd",
+  "author": "Swapnil Agrawal",
+  "license": "MIT",
+  "talk": {
+    "canvas": {
+      "w": 720,
+      "h": 936
+    },
+    "base": "talk/base.png",
+    "files": {
+      "A": "talk/A.png",
+      "O": "talk/O.png",
+      "E": "talk/E.png",
+      "blink": "talk/blink.png"
+    },
+    "patches": {
+      "A": {
+        "x": 329,
+        "y": 397,
+        "w": 64,
+        "h": 46
+      },
+      "O": {
+        "x": 329,
+        "y": 397,
+        "w": 64,
+        "h": 46
+      },
+      "E": {
+        "x": 329,
+        "y": 397,
+        "w": 64,
+        "h": 46
+      },
+      "blink": {
+        "x": 285,
+        "y": 341,
+        "w": 150,
+        "h": 34
+      }
+    },
+    "poses": {
+      "wave": "talk/pose_wave.png",
+      "point": "talk/pose_point.png",
+      "open": "talk/pose_open.png",
+      "thumbs": "talk/pose_thumbs.png"
+    }
+  },
+  "voice": {
+    "engine": "edge-tts",
+    "id": "en-GB-RyanNeural",
+    "preset": "ryan"
+  },
+  "style": {
+    "bible": "flat gouache poster style, cloud-white puffy afro, coral jacket, sky shorts",
+    "palette": [],
+    "outfit": ""
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "spec": 1,
+  "id": "bhavishy",
+  "name": "Bhavishy Agrawal",
+  "author": "Swapnil Agrawal",
+  "license": "MIT",
+  "talk": {
+    "canvas": {
+      "w": 720,
+      "h": 936
+    },
+    "base": "talk/base.png",
+    "files": {
+      "A": "talk/A.png",
+      "O": "talk/O.png",
+      "E": "talk/E.png",
+      "blink": "talk/blink.png"
+    },
+    "patches": {
+      "A": {
+        "x": 323,
+        "y": 270,
+        "w": 60,
+        "h": 44
+      },
+      "O": {
+        "x": 323,
+        "y": 270,
+        "w": 60,
+        "h": 44
+      },
+      "E": {
+        "x": 323,
+        "y": 270,
+        "w": 60,
+        "h": 44
+      },
+      "blink": {
+        "x": 285,
+        "y": 197,
+        "w": 140,
+        "h": 30
+      }
+    },
+    "poses": {
+      "wave": "talk/pose_wave.png",
+      "point": "talk/pose_point.png",
+      "open": "talk/pose_open.png",
+      "thumbs": "talk/pose_thumbs.png"
+    },
+    "poseAnchors": {
+      "base": {
+        "mouth": [
+          359,
+          278
+        ],
+        "eyes": [
+          360,
+          204
+        ]
+      },
+      "wave": {
+        "mouth": [
+          377,
+          330
+        ],
+        "eyes": [
+          391,
+          254
+        ]
+      },
+      "point": {
+        "mouth": [
+          197,
+          272
+        ],
+        "eyes": [
+          215,
+          186
+        ]
+      },
+      "open": {
+        "mouth": [
+          359,
+          256
+        ],
+        "eyes": [
+          360,
+          175
+        ]
+      },
+      "thumbs": {
+        "mouth": [
+          357,
+          282
+        ],
+        "eyes": [
+          354,
+          207
+        ]
+      }
+    }
+  },
+  "voice": {
+    "engine": "edge-tts",
+    "id": "en-US-AndrewMultilingualNeural",
+    "preset": "andrew"
+  },
+  "style": {
+    "bible": "bold marker illustration, cobalt-blue outlines, orange patterned kurta, black glasses, the brother",
+    "palette": [],
+    "outfit": ""
+  }
+}

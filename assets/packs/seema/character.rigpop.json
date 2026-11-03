@@ -1,0 +1,114 @@
+{
+  "spec": 1,
+  "id": "seema",
+  "name": "Seema Agrawal",
+  "author": "Swapnil Agrawal",
+  "license": "MIT",
+  "talk": {
+    "canvas": {
+      "w": 720,
+      "h": 936
+    },
+    "base": "talk/base.png",
+    "files": {
+      "A": "talk/A.png",
+      "O": "talk/O.png",
+      "E": "talk/E.png",
+      "blink": "talk/blink.png"
+    },
+    "patches": {
+      "A": {
+        "x": 331,
+        "y": 182,
+        "w": 50,
+        "h": 36
+      },
+      "O": {
+        "x": 331,
+        "y": 182,
+        "w": 50,
+        "h": 36
+      },
+      "E": {
+        "x": 331,
+        "y": 182,
+        "w": 50,
+        "h": 36
+      },
+      "blink": {
+        "x": 296,
+        "y": 139,
+        "w": 120,
+        "h": 26
+      }
+    },
+    "poses": {
+      "wave": "talk/pose_wave.png",
+      "point": "talk/pose_point.png",
+      "open": "talk/pose_open.png",
+      "thumbs": "talk/pose_thumbs.png"
+    },
+    "poseAnchors": {
+      "base": {
+        "mouth": [
+          356,
+          191
+        ],
+        "eyes": [
+          356,
+          147
+        ]
+      },
+      "wave": {
+        "mouth": [
+          407,
+          200
+        ],
+        "eyes": [
+          406,
+          167
+        ]
+      },
+      "point": {
+        "mouth": [
+          251,
+          187
+        ],
+        "eyes": [
+          243,
+          145
+        ]
+      },
+      "open": {
+        "mouth": [
+          366,
+          194
+        ],
+        "eyes": [
+          366,
+          149
+        ]
+      },
+      "thumbs": {
+        "mouth": [
+          360,
+          193
+        ],
+        "eyes": [
+          370,
+          144
+        ]
+      }
+    }
+  },
+  "voice": {
+    "engine": "edge-tts",
+    "id": "en-GB-SoniaNeural",
+    "preset": "sonia"
+  },
+  "style": {
+    "bible": "bold marker illustration, cobalt-blue outlines, mustard saree, green blouse, gold necklace, the mother",
+    "palette": [],
+    "outfit": ""
+  }
+}
