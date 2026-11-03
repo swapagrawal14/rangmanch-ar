@@ -83,10 +83,31 @@ Camera + Mic ──► MediaPipe Tasks Vision (WASM, GPU→CPU fallback, lite mo
                                                             ├─ hands → co-actor entrance/walk, pinch = talk
                                                             └─ face  → A/O/E mouths + blink
 Characters ────► Rigpop Forge packs, consumed as-is
-                 (character.rigpop.json: base + gesture poses + A/O/E/blink patch tiles)
-Stage ─────────► <canvas>: mirrored camera feed as the room, floor shadows, captions
+                 (character.rigpop.json: base art + A/O/E/blink patch tiles)
+Auto-rig ──────► At cast time the browser builds the puppet from the pack's own
+                 artwork: the skeleton is estimated from the face geometry (the
+                 same math as Forge's WowKit exporter), then the real arm lines
+                 are found by scanning the drawing's skin tones. Arms and head
+                 are cut out as feathered pieces, the holes are filled with
+                 torso fabric, and the face is erased whole so nothing ghosts.
+Stage ─────────► <canvas>: your room as a soft blur (you are never drawn),
+                 aspect-true landmark mapping, floor shadows, captions
 Film ──────────► canvas.captureStream(30) + mic track → MediaRecorder → download
 ```
+
+Performance is engineered, not hoped for: pose runs every frame while face and
+hands alternate frames (they read perfectly at half rate), the rig builds in
+~200 ms of chunked passes that never freeze the page, and if the frame rate
+sags the stage sheds load automatically and tells you on the ticket.
+
+## Testing
+
+`tests/` drives the real app in Chromium (Playwright): console-error watch,
+Demo Mode, synthetic-performer scenarios (rest, wave + talk, look + laugh,
+blink, portrait close-up, co-actors, 9:16 reel, a second rigged lead), a
+record/download round-trip, rig-piece dumps per pack, and a run with the real
+MediaPipe models against a fake camera. Every screenshot is eyeballed before
+a release is called done.
 
 Engineering choices that matter:
 

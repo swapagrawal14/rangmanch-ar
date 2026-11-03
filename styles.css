@@ -113,6 +113,7 @@ video#cam { display: none; }
   transition: opacity 0.6s ease;
 }
 .stage-msg:empty { display: none; }
+[hidden] { display: none !important; }
 .stage-board {
   position: relative; z-index: 2; margin: 0 -30px; padding: 10px 16px 12px;
   text-align: center; color: #ffe9c9; letter-spacing: .14em; font-size: 12.5px; text-transform: uppercase;
@@ -211,5 +212,5 @@ footer .sep { color: var(--gold); margin: 0 10px; }
   .stage-frame { padding: 26px 18px 0; }
   .curtain-side { width: 18px; }
   .stage-board { margin: 0 -18px; font-size: 11px; }
-  .stage-msg { bottom: 64px; }
+  .stage-msg { bottom: 12px; max-width: 94%; border-radius: 14px; font-size: 12px; padding: 6px 12px; }
 }

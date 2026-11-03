@@ -29,7 +29,6 @@ await sleep(700);
 
 const results = { errors: [], shots: [], checks: {} };
 const browser = await chromium.launch({
-  executablePath: '/opt/meta-chromium/chrome',
   args: ['--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required']
 });
 const page = await browser.newPage({ viewport: { width: 1280, height: 950 } });
@@ -140,8 +139,25 @@ await page.click('#btn-reel');
 await page.evaluate(() => { window.__rangmanch.state.mode = 'idle'; });
 await page.selectOption('#cast-body', 'sanjay');
 await page.waitForFunction(() => window.__rangmanch.packs.sanjay && window.__rangmanch.packs.sanjay.rig, null, { timeout: 30000 }).catch(() => {});
+results.checks.rigJ = await page.evaluate(() => {
+  const J = window.__rangmanch.packs.swapnil.rig.J;
+  const r = p => p.map(v => Math.round(v));
+  return { shoR: r(J.shoR), elbR: r(J.elbR), wriR: r(J.wriR), shoL: r(J.shoL), elbL: r(J.elbL), wriL: r(J.wriL) };
+});
 results.checks.sanjayRig = await page.evaluate(() => !!window.__rangmanch.packs.sanjay.rig);
-await page.evaluate(() => { window.__rangmanch.state.mode = 'camera'; document.querySelector('#coactors').checked = false; });
+await page.evaluate(() => {
+  window.__rangmanch.state.mode = 'camera'; document.querySelector('#coactors').checked = false;
+  // reset to the centred rest performer (demo's last face may be mid-glance)
+  window.__setPose((P, fl, cats) => {
+    const set = (i, x, y) => { P[i] = { x, y, z: 0, visibility: 1 }; };
+    set(0, 0.5, 0.18); set(11, 0.44, 0.30); set(12, 0.56, 0.30);
+    set(13, 0.40, 0.45); set(14, 0.60, 0.45); set(15, 0.38, 0.60); set(16, 0.62, 0.60);
+    set(23, 0.46, 0.55); set(24, 0.54, 0.55); set(27, 0.45, 0.92); set(28, 0.55, 0.92);
+    fl[1] = { x: 0.5, y: 0.315, z: 0 };
+    cats.jawOpen = 0; cats.mouthSmileLeft = 0; cats.mouthSmileRight = 0; cats.eyeBlinkLeft = 0; cats.eyeBlinkRight = 0;
+    window.__rangmanch.raw.hands = [];
+  });
+});
 await sleep(900);
 await shot('11-sanjay-lead');
 

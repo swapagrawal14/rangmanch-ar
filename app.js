@@ -147,18 +147,87 @@ async function buildRigAsync(pack) {
       const bbox = { x: bx0, y: by0, w: bx1 - bx0, h: by1 - by0 };
       const J = estimateJoints(pack.manifest, bbox, W, H);
       if (!J) { pack.rigFailed = true; return null; }
-      const R = Math.max(16, J.faceW * 0.157), F = Math.max(5, R * 0.3), R2 = (R + 2) * (R + 2);
+      /* Find the REAL arm line: scan skin-tone pixels in the side bands from
+         the shoulder down (Forge's estimates can sit ~90px off the drawn arm).
+         Works for bare arms; for sleeved characters the sleeve's own light
+         fabric traces the same line. Falls back to the estimates. */
+      // skin across the packs spans fair (252,232,217) to deep (167,101,60);
+      // saturated garment colours (saree gold r-b≈230+) must NOT pass
+      const isSkin = i => data[i + 3] > 60 && data[i] > 120 &&
+        (data[i] - data[i + 2]) >= 5 && (data[i] - data[i + 2]) <= 120 &&
+        (data[i] - data[i + 1]) >= -5 && (data[i] - data[i + 1]) <= 75 &&
+        data[i + 1] > data[i + 2] + 5;
+      const detectArm = side => {
+        let xa = Math.round(J.faceCx + side * J.faceW * 0.40), xb = Math.round(J.faceCx + side * J.faceW * 1.75);
+        const lo = Math.max(0, Math.min(xa, xb)), hi = Math.min(W - 1, Math.max(xa, xb));
+        // a hanging wrist never passes ~84% of the shoulder-to-floor span —
+        // cap the scan there so the path can't wander into the legs
+        const yCap = Math.min(J.shoR[1] + J.headH * 1.9, J.shoR[1] + (bbox.y + bbox.h - J.shoR[1]) * 0.84);
+        const cand = [];
+        for (let y = Math.round(J.shoR[1]) + 6; y < yCap; y += 2) {
+          let sum = 0, cnt = 0;
+          for (let x = lo; x <= hi; x++) if (isSkin((y * W + x) * 4)) { sum += x; cnt++; }
+          if (cnt >= 4) cand.push([y, sum / cnt]);
+        }
+        // skin specks above the arm start sparse — first take the longest
+        // unbroken run of candidates, then walk it with the line-fit rule
+        let bestRun = [], curRun = [];
+        for (const r of cand) {
+          if (curRun.length && r[0] - curRun[curRun.length - 1][0] > 14) {
+            if (curRun.length > bestRun.length) bestRun = curRun;
+            curRun = [];
+          }
+          curRun.push(r);
+        }
+        if (curRun.length > bestRun.length) bestRun = curRun;
+        // start from the best run, then keep extending over later candidates
+        // while they hug the arm's fitted line; stop at a big gap, a jump, or
+        // when the centroid slides off the line (legs, feet, props)
+        const rows = [];
+        for (let ci = cand.indexOf(bestRun[0]); ci < cand.length; ci++) {
+          const r = cand[ci];
+          if (rows.length) {
+            const prev = rows[rows.length - 1];
+            if (r[0] - prev[0] > 60) break;
+            if (Math.abs(r[1] - prev[1]) > 46) break;
+            if (rows.length >= 10) {
+              const tail = rows.slice(-12);
+              const n = tail.length, sy = tail.reduce((s, q) => s + q[0], 0), sx = tail.reduce((s, q) => s + q[1], 0);
+              const syy = tail.reduce((s, q) => s + q[0] * q[0], 0), sxy = tail.reduce((s, q) => s + q[0] * q[1], 0);
+              const den = n * syy - sy * sy || 1, b = (n * sxy - sy * sx) / den, a = (sx - b * sy) / n;
+              if (Math.abs(r[1] - (a + b * r[0])) > 34) break;
+            }
+          }
+          rows.push(r);
+        }
+        if (rows.length < 25) return null;
+        const span = rows[rows.length - 1][0] - rows[0][0];
+        if (span < J.headH * 0.7) return null;
+        const sm = rows.map((r, i) => {
+          let s = 0, c = 0;
+          for (let d = -2; d <= 2; d++) { const q = rows[i + d]; if (q) { s += q[1]; c++; } }
+          return [r[0], s / c];
+        });
+        const at = f => sm.reduce((best, r) => Math.abs(r[0] - (sm[0][0] + span * f)) < Math.abs(best[0] - (sm[0][0] + span * f)) ? r : best, sm[0]);
+        const sho = [sm[0][1], sm[0][0]], elb = at(0.52), wri = [sm[sm.length - 1][1], sm[sm.length - 1][0]];
+        return { sho, elb: [elb[1], elb[0]], wri };
+      };
+      const armL = detectArm(1), armR = detectArm(-1); // image-right side = +x
+      if (armL) { J.shoL = armL.sho; J.elbL = armL.elb; J.wriL = armL.wri; }
+      if (armR) { J.shoR = armR.sho; J.elbR = armR.elb; J.wriR = armR.wri; }
+      const R = Math.max(16, J.faceW * 0.157), F = Math.max(5, R * 0.3), R2 = (R + 12) * (R + 12);
       const out = new ImageData(W, H); out.data.set(data);
       const od = out.data;
+      // fill arm holes with TORSO fabric: smear toward the body's centre line
       const arms = [
-        { segs: [[J.shoR, J.elbR], [J.elbR, J.wriR]], shift: -R * 1.35 },
-        { segs: [[J.shoL, J.elbL], [J.elbL, J.wriL]], shift: R * 1.35 }
+        { segs: [[J.shoR, J.elbR], [J.elbR, J.wriR]], shift: Math.sign(J.faceCx - J.shoR[0]) * R * 1.35 },
+        { segs: [[J.shoL, J.elbL], [J.elbL, J.wriL]], shift: Math.sign(J.faceCx - J.shoL[0]) * R * 1.35 }
       ];
       // pass 1: erase the arms (smear neighbouring pixels over them)
       for (const a of arms) {
         const xs = a.segs.flatMap(s => [s[0][0], s[1][0]]), ys = a.segs.flatMap(s => [s[0][1], s[1][1]]);
-        const x0 = Math.max(0, Math.floor(Math.min(...xs) - R - 4)), x1 = Math.min(W - 1, Math.ceil(Math.max(...xs) + R + 4));
-        const y0 = Math.max(0, Math.floor(Math.min(...ys) - R - 4)), y1 = Math.min(H - 1, Math.ceil(Math.max(...ys) + R + 4));
+        const x0 = Math.max(0, Math.floor(Math.min(...xs) - R - 16)), x1 = Math.min(W - 1, Math.ceil(Math.max(...xs) + R + 16));
+        const y0 = Math.max(0, Math.floor(Math.min(...ys) - R - 16)), y1 = Math.min(H - 1, Math.ceil(Math.max(...ys) + R + 16));
         for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
           const d2 = Math.min(distSeg2(x, y, a.segs[0][0], a.segs[0][1]), distSeg2(x, y, a.segs[1][0], a.segs[1][1]));
           if (d2 > R2) continue;
@@ -177,6 +246,7 @@ async function buildRigAsync(pack) {
         const x0 = Math.max(0, Math.floor(ecx - erx * 1.15)), x1 = Math.min(W - 1, Math.ceil(ecx + erx * 1.15));
         const y0 = Math.max(0, Math.floor(ecy - ery * 1.15)), y1 = Math.min(H - 1, Math.ceil(ecy + ery * 1.15));
         for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+          if (y > J.chin + J.headH * 0.08) continue; // throat/neck keep their real art
           const dE = Math.hypot((x - ecx) / erx, (y - ecy) / ery);
           if (dE >= 1.10) continue;
           const i = (y * W + x) * 4;
@@ -196,7 +266,7 @@ async function buildRigAsync(pack) {
         const NL = J.neck[1], FH = Math.max(8, J.headH * 0.06);
         const snap = new Uint8ClampedArray(od);
         const x0 = Math.max(0, Math.floor(J.headBox[0])), x1 = Math.min(W - 1, Math.ceil(J.headBox[2]));
-        const y1 = Math.min(H - 1, Math.ceil(NL + FH));
+        const y1 = Math.min(H - 1, Math.ceil(Math.min(NL + FH, J.chin + J.headH * 0.08)));
         for (let y = 0; y <= y1; y++) {
           const f = Math.max(0, Math.min(1, (NL + FH - y) / (2 * FH)));
           if (f <= 0.02) continue;
@@ -218,7 +288,8 @@ async function buildRigAsync(pack) {
       }
       const erased = document.createElement('canvas'); erased.width = W; erased.height = H;
       erased.getContext('2d').putImageData(out, 0, 0);
-      // head piece: art above the neck line, feathered at the junction
+      // head piece: head + flowing hair, feathered only at its bottom edge so
+      // the junction hides where hair meets the dress
       const NL = J.neck[1], FH = Math.max(8, J.headH * 0.06), hb = J.headBox;
       const hw = Math.round(hb[2] - hb[0]), hh = Math.round(hb[3] - hb[1]);
       const headC = document.createElement('canvas'); headC.width = hw; headC.height = hh;
@@ -226,8 +297,9 @@ async function buildRigAsync(pack) {
       hctx.drawImage(img, -hb[0], -hb[1]);
       const hid = hctx.getImageData(0, 0, hw, hh), hd = hid.data;
       for (let y = 0; y < hh; y++) {
-        const f = Math.max(0, Math.min(1, (NL + FH - (y + hb[1])) / (2 * FH)));
-        if (f >= 0.999) continue;
+        const gy = y + hb[1];
+        if (gy < hb[3] - FH * 2) continue;
+        const f = Math.max(0, Math.min(1, (hb[3] - gy) / (FH * 2)));
         for (let x = 0; x < hw; x++) { const i = (y * hw + x) * 4 + 3; hd[i] = Math.round(hd[i] * f); }
       }
       hctx.putImageData(hid, 0, 0);
@@ -246,10 +318,20 @@ async function buildRigAsync(pack) {
         const cctx = c.getContext('2d', { willReadFrequently: true });
         cctx.drawImage(img, -box[0], -box[1]);
         const idd = cctx.getImageData(0, 0, cw, ch), dd = idd.data;
-        const Rr = R + F;
+        const isUpper = name === 'Rup' || name === 'Lup';
+        const vx = b[0] - a[0], vy = b[1] - a[1], L2 = vx * vx + vy * vy || 1;
+        const crossC = (J.faceCx - a[0]) * vy - (((a[1] + b[1]) / 2) - a[1]) * vx;
         for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
-          const d = Math.sqrt(distSeg2(x + box[0], y + box[1], a, b));
-          const f = Math.max(0, Math.min(1, (Rr - d) / (2 * F)));
+          const gx = x + box[0], gy = y + box[1];
+          let t = ((gx - a[0]) * vx + (gy - a[1]) * vy) / L2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+          // taper: narrow at the shoulder (keeps dress fabric out of the strip),
+          // full width at the hand; and narrower on the body-centre side, where
+          // the strip would otherwise bite into the dress
+          let Rt = R * (isUpper ? (0.60 + 0.40 * t) : (0.62 + 0.36 * t)) + F;
+          const cross = (gx - a[0]) * vy - (gy - a[1]) * vx;
+          if (crossC !== 0 && Math.sign(cross) === Math.sign(crossC)) Rt *= 0.7;
+          const d = Math.sqrt(distSeg2(gx, gy, a, b));
+          const f = Math.max(0, Math.min(1, (Rt - d) / (2 * F)));
           if (f < 0.999) { const i = (y * cw + x) * 4 + 3; dd[i] = Math.round(dd[i] * f); }
         }
         cctx.putImageData(idd, 0, 0);
@@ -367,7 +449,18 @@ function synthDemo(t) {
 
 /* ---------- stage helpers ---------- */
 function setMsg(t) { msgEl.textContent = t || ''; msgEl.style.opacity = t ? '1' : '0'; state.msgAt = performance.now(); }
-function toPx(p) { return { x: (1 - p.x) * stage.width, y: p.y * stage.height }; }
+/* Landmarks arrive normalised to the CAMERA frame. Map them into the stage
+   with the aspect preserved (fit, centred) — otherwise a landscape camera on
+   the portrait reel stage would stretch the performer and detach the arms. */
+const MAP = { sw: 1280, sh: 720, ox: 0, oy: 0 };
+function updateMap() {
+  const W = stage.width, H = stage.height;
+  const srcA = (state.mode === 'camera' && cam.videoWidth) ? cam.videoWidth / cam.videoHeight : 16 / 9;
+  let sw = W, sh = W / srcA;
+  if (sh > H) { sh = H; sw = H * srcA; }
+  MAP.sw = sw; MAP.sh = sh; MAP.ox = (W - sw) / 2; MAP.oy = (H - sh) / 2;
+}
+function toPx(p) { return { x: MAP.ox + (1 - p.x) * MAP.sw, y: MAP.oy + p.y * MAP.sh }; }
 function mid(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
 function faceState() {
   const c = (state.face && state.face.cats) || {};
@@ -384,12 +477,15 @@ function faceState() {
 function headPoseRaw() {
   const fl = state.face && state.face.landmarks;
   if (!fl || !fl[1] || !fl[33] || !fl[263]) return null;
-  const nose = toPx(fl[1]), eR = toPx(fl[33]), eL = toPx(fl[263]);
-  const eyeMid = mid(eR, eL), eyeDist = Math.max(10, Math.hypot(eL.x - eR.x, eL.y - eR.y));
+  const nose = toPx(fl[1]), e1 = toPx(fl[33]), e2 = toPx(fl[263]);
+  // in the mirrored stage view, pick the canvas-left and canvas-right eyes —
+  // using the raw landmark order flips the roll to 180° on a level face
+  const eLft = e1.x < e2.x ? e1 : e2, eRgt = e1.x < e2.x ? e2 : e1;
+  const eyeMid = mid(e1, e2), eyeDist = Math.max(10, Math.hypot(e2.x - e1.x, e2.y - e1.y));
   return {
     yaw: Math.max(-0.75, Math.min(0.75, (nose.x - eyeMid.x) / (eyeDist * 0.55))),
     pitch: Math.max(-0.55, Math.min(0.55, (nose.y - eyeMid.y) / eyeDist - 0.62)),
-    roll: Math.max(-0.32, Math.min(0.32, Math.atan2(eL.y - eR.y, eL.x - eR.x)))
+    roll: Math.max(-0.32, Math.min(0.32, Math.atan2(eRgt.y - eLft.y, eRgt.x - eLft.x)))
   };
 }
 function drawTile(img, cx, cy, w, rot) {
@@ -431,6 +527,7 @@ function drawLead() {
   const W = stage.width, H = stage.height, lm = state.pose;
   if (!lm) {
     const img = pack.img.base, h = H * 0.94, w = h * img.naturalWidth / img.naturalHeight;
+    state.leadH = h; state.leadFeetY = H - 4;
     shadow(W / 2, H - 6, w * 0.7);
     ctx.drawImage(img, (W - w) / 2, H - h, w, h);
     return;
@@ -455,13 +552,16 @@ function drawLead() {
     };
     const rel = i => { const p = P(i); return { x: O.x + (p.x - O.x) * relScale, y: O.y + (p.y - O.y) * relScale }; };
     const feet = imgPt(J.hip[0], rig.bbox.y + rig.bbox.h);
+    state.leadFeetY = Math.min(H - 4, feet.y);
+    state.leadH = rig.bbox.h * k;
     shadow(feet.x, Math.min(H - 6, feet.y), 300 * k);
+    // upper arms go UNDER the torso (their tops tuck behind the dress),
+    // forearms and head ride on top
+    drawStrip(rig.strips.Rup, imgPt(J.shoR[0], J.shoR[1]), rel(14));
+    drawStrip(rig.strips.Lup, imgPt(J.shoL[0], J.shoL[1]), rel(13));
     ctx.save(); ctx.translate(O.x, O.y); ctx.rotate(tilt); ctx.scale(k, k);
     ctx.drawImage(rig.erased, -org[0], -org[1]); ctx.restore();
-    // arms: shoulders pinned to the body art, elbows/wrists follow you
-    drawStrip(rig.strips.Rup, imgPt(J.shoR[0], J.shoR[1]), rel(14));
     drawStrip(rig.strips.Rlo, rel(14), rel(16));
-    drawStrip(rig.strips.Lup, imgPt(J.shoL[0], J.shoL[1]), rel(13));
     drawStrip(rig.strips.Llo, rel(13), rel(15));
     // head: own piece, gaze-driven, face tiles drawn inside its transform
     const hpR = headPoseRaw(), hp = state.hpS;
@@ -486,6 +586,7 @@ function drawLead() {
     const ankY = Math.max(P(27).y, P(28).y), span = Math.max(80, ankY - P(0).y);
     const charH = Math.min(H * 1.05, span * 1.5), charW = charH * img.naturalWidth / img.naturalHeight;
     const cx = hip.x, feetY = Math.min(H - 4, ankY + charH * 0.06);
+    state.leadFeetY = feetY; state.leadH = charH;
     ctx.save(); ctx.translate(cx, feetY); ctx.rotate(tilt * 0.7); ctx.translate(-cx, -feetY);
     shadow(cx, feetY, charW * 0.8);
     ctx.drawImage(img, cx - charW / 2, feetY - charH, charW, charH); ctx.restore();
@@ -514,9 +615,11 @@ function drawCoActors(now) {
     if (!a.x) a.x = a.tx || W / 2;
     a.x += ((a.tx || a.x) - a.x) * 0.12;
     const img = pack.img.base;
-    const fullH = H * 0.54, h = fullH * (0.25 + 0.75 * a.p);
+    // sidekicks scale with the lead, not the frame — vital in 9:16 reel mode
+    const fullH = (state.leadH || H * 0.7) * 0.72, h = fullH * (0.25 + 0.75 * a.p);
     const w = h * img.naturalWidth / img.naturalHeight;
-    const feetY = H + (1 - a.p) * fullH * 0.75;
+    const floorY = state.leadFeetY || (H - 4); // stand on the lead's floor line, not the frame edge
+    const feetY = floorY + (1 - a.p) * fullH * 0.75;
     const bobA = Math.sin(now / 300 + (sideName === 'left' ? 0 : 2)) * 3 + (a.talk > 0.5 ? Math.sin(now / 60) * 4 : 0);
     ctx.save(); ctx.globalAlpha = Math.min(1, a.p * 1.6);
     shadow(a.x, Math.min(H - 4, feetY), w * 0.75);
@@ -549,6 +652,7 @@ let fpsFrames = 0, fpsLast = 0, fpsEMA = 60, lastFrameT = 0;
 function loop(ts) {
   requestAnimationFrame(loop);
   fitStage();
+  updateMap();
   if (lastFrameT) fpsEMA += ((1000 / Math.max(1, ts - lastFrameT)) - fpsEMA) * 0.05;
   lastFrameT = ts;
   if (state.mode === 'camera') infer();
