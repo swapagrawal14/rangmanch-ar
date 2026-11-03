@@ -14,10 +14,11 @@
 
 **Every AI tool in this hackathon asks you to type. Rangmanch asks you to *act*.**
 
-Stand in front of your phone. Your **body** becomes the lead actor, your **left
-and right hands** become two puppet co-stars, and your **face** drives the lead's
-mouth and blinks — all of them live doodle characters standing in AR on your
-real table, in your real room. Hit record, perform the scene in your own voice,
+Stand in front of your phone. You **become** the lead actor: the character is
+cut live from its own artwork and re-posed on your skeleton — shoulders,
+elbows, wrists, hips — every single frame. Your **hands** conduct two full-size
+co-actors standing on the stage floor beside you, and your **face** drives the
+lead's mouth and blinks. Hit record, perform the scene in your own voice,
 download the cartoon film.
 
 No drawing. No animation software. No face-cam. No prompt-typing. No server —
@@ -51,18 +52,17 @@ and camera-shy creator who can act but cannot animate.
 
 <p align="center">
   <img src="docs/assets/pose-strip.png" alt="Lead actor poses — base, wave, point, open, thumbs" width="820">
+  <br><em>The lead's own artwork (Rigpop Forge pose set). Since v0.4 the live performance is skeletal — these poses are the art the puppet is cut from, not frames it swaps between.</em>
 </p>
 
 | You do this | The stage does this |
 |---|---|
-| Stand, move, walk | Lead character anchors to your hips, scales and tilts with your body |
-| Raise one hand | Lead swaps to the **wave** pose |
-| Raise both hands | **Open** pose |
-| Stretch an arm out | **Point** pose |
+| Wave, dance, crouch, lean, walk | The lead's arms, torso and head follow **your** skeleton, bone by bone — it is not swapping pose pictures, it is wearing your movement |
 | Open your mouth / make an O / smile | Lead's mouth becomes **A / O / E** — the Rigpop Talk patches, composited live |
 | Blink | Lead blinks |
-| Bring a hand near the camera | That hand is now a puppet character — tilt it, move it |
-| Pinch thumb + finger | The puppet talks (its O-mouth fires) |
+| Raise a hand into frame | A full-size co-actor walks onto the stage floor on that side |
+| Move your hand around | The co-actor walks with it |
+| Pinch thumb + finger | The co-actor talks (its O-mouth fires) |
 | Type a caption, hit Record | Film + your mic voice record together, caption burned in |
 | Switch to 9:16 | Same stage, vertical — ready for Reels / Shorts |
 
@@ -77,9 +77,9 @@ and camera-shy creator who can act but cannot animate.
 Camera + Mic ──► MediaPipe Tasks Vision (WASM, GPU→CPU fallback, lite models)
                    ├─ PoseLandmarker   33 pts        ─┐
                    ├─ HandLandmarker   2 × 21 pts    ─┼─► Retargeting
-                   └─ FaceLandmarker   52 blendshapes─┘    ├─ body → anchor/tilt/gesture-pose swap
-                                                            ├─ hands → puppet pos/tilt, pinch = talk
-                                                            └─ face  → A/O/E mouths + blink (per-pose anchors)
+                   └─ FaceLandmarker   52 blendshapes─┘    ├─ body → live puppet rig (bone-by-bone)
+                                                            ├─ hands → co-actor entrance/walk, pinch = talk
+                                                            └─ face  → A/O/E mouths + blink
 Characters ────► Rigpop Forge packs, consumed as-is
                  (character.rigpop.json: base + gesture poses + A/O/E/blink patch tiles)
 Stage ─────────► <canvas>: mirrored camera feed as the room, floor shadows, captions
@@ -95,9 +95,13 @@ Engineering choices that matter:
   retargeting, so characters glide instead of jittering.
 - **Staggered inference, quality toggle.** High mode runs pose every frame;
   Balanced mode spreads the three models thinner for low-end phones.
-- **Per-pose face anchors.** Mouth/blink tiles are placed by each pose's own
-  anchors (where the pack provides them), so the mouth doesn't drift when the
-  pose changes — a lesson bought with a full day on the family pilot.
+- **A puppet cut from the art itself.** Earlier versions swapped canned pose
+  images — and felt dead. Now, when a humanoid pack is cast as lead, the app
+  cuts its arms out of the base artwork in the browser (feathered strips along
+  the arm bones, holes filled by smearing neighbouring hair/dress pixels) and
+  re-poses them from your skeleton every frame. The torso, head and dress ride
+  your torso's position, tilt and scale; mouth/blink tiles ride the same
+  transform, so the face never drifts.
 - **Never a blank screen.** Demo Mode drives the whole cast with synthetic
   landmarks, so anyone (including judges) can see it without a camera.
 - **Lazy cast loading.** Only your three chosen characters download; swapping
@@ -139,6 +143,7 @@ README visuals are generated from the packs' real art by
 - [x] v0.1 — pose + hands + face tracking, body-part casting, recording
 - [x] v0.2 — theatre-grade UI (marquee, curtains, casting cards, playbill)
 - [x] v0.3 — all 16 packs, smoothing, quality toggle, 9:16 reel mode, captions, record timer + retake
+- [x] v0.4 — **You Become the Character**: live puppet rig (bone-by-bone conversion, no pose swaps), full-size stage co-actors conducted by your hands, all-English UI
 - [ ] Per-character voice pitch for takes, scene list / multi-take editor
 - [ ] Vendored models for a fully offline build
 - [ ] The demo reel: *Germ vs Toothbrush*, performed entirely inside Rangmanch

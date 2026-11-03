@@ -72,7 +72,7 @@ def hero():
     f = font(SERIF_B, 108)
     tw = d.textlength(title, font=f)
     d.text(((W - tw) / 2, 54), title, font=f, fill=CREAM, stroke_width=2, stroke_fill=(0, 0, 0))
-    tag = "Act karo, animate mat karo — one person, every character, live."
+    tag = "Don't animate. Act. — one person, every character, live."
     f2 = font(SANS_B, 33)
     tw2 = d.textlength(tag, font=f2)
     d.text(((W - tw2) / 2, 182), tag, font=f2, fill=GOLD)
@@ -129,8 +129,8 @@ def pose_strip():
 
 # ---------------- face patch strip ----------------
 def face_strip():
-    tiles = [("A.png", "A — munh khula"), ("O.png", "O — gol munh"),
-             ("E.png", "E — smile"), ("blink.png", "BLINK — palak")]
+    tiles = [("A.png", "A — mouth open"), ("O.png", "O — round lips"),
+             ("E.png", "E — big smile"), ("blink.png", "BLINK — eyes shut")]
     cell_w, H = 330, 300
     W = cell_w * len(tiles)
     img = Image.new("RGB", (W, H), (247, 234, 215))
