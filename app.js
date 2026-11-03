@@ -14,9 +14,9 @@
    salute, covering the face, hands on head, namaste, clap, fist, thumbs,
    point, open palm) and each is performed as its own authored drawing, and
    a wave really waves (two drawn frames, hard cuts in time with your hand). */
-import { classifyHandsFace, makeGestureMemory } from './gestures.js?v=2.2.0';
-import { HeadTracker, HeadWarpGL, warpPoint, OneEuro, swings } from './headwarp.js?v=2.2.0';
-import { synthFace, synthHand } from './synth.js?v=2.2.0';
+import { classifyHandsFace, makeGestureMemory } from './gestures.js?v=2.2.1';
+import { HeadTracker, HeadWarpGL, warpPoint, OneEuro, swings } from './headwarp.js?v=2.2.1';
+import { synthFace, synthHand } from './synth.js?v=2.2.1';
 
 const $ = s => document.querySelector(s);
 const stage = $('#stage'), ctx = stage.getContext('2d');
@@ -31,7 +31,7 @@ const MP_VER = '0.10.14';
 const WASM = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/wasm`;
 const MODEL = 'https://storage.googleapis.com/mediapipe-models';
 const PACKS_BASE = 'assets/packs/';
-const VERSION = '2.2.0';
+const VERSION = '2.2.1';
 
 /* ---------- cast ---------- */
 const CAST = [
@@ -355,6 +355,17 @@ function infer() {
    tilts, waves, nods, shakes its head, gasps, says namaste, thinks, opens
    its arms and points — every path the camera uses, without a camera. */
 const DEMO = ['tilt', 'wave', 'nod', 'shake', 'mouth', 'namaste', 'think', 'open', 'point'];
+/* Demo "speech" (house standard, same rule as every Rigpop renderer):
+   the mouth follows a speech envelope — fast syllable bursts inside a
+   phrase, silence between phrases — never a slow continuous sine flap.
+   Deterministic in t so tests and recordings are reproducible. */
+function demoSpeech(s) {
+  const ph = s % 3.2;
+  if (ph > 2.0) return 0;
+  const syl = Math.pow(Math.max(0, Math.sin(s * 34)), 2);
+  const vary = 0.65 + 0.35 * Math.sin(s * 2.1 + 1.3);
+  return Math.min(1, syl * vary * 1.15) * 0.6;
+}
 function synthDemo(t) {
   const s = t / 1000, bob = Math.sin(s * 1.6) * 0.008, phase = DEMO[Math.floor(s / 3.2) % DEMO.length], ps = (s % 3.2);
   const asp = MAP.sw / MAP.sh;
@@ -375,8 +386,8 @@ function synthDemo(t) {
   if (phase === 'shake') yaw = ps > 0.3 ? Math.sin((ps - 0.3) * 9) * 0.55 : 0;
   if (phase === 'think') { roll = -0.12; yaw = 0.2; }
   const fy = 0.272 + bob, fw = 0.085;
-  const talk = Math.max(0, Math.sin(s * 2.4)) * 0.55;
-  const fl = synthFace({ x: 0.5, y: fy, w: fw, roll, yaw, pitch, aspect: asp, mouthOpen: phase === 'mouth' ? 0.4 : talk * 0.3 });
+  const talk = demoSpeech(s);
+  const fl = synthFace({ x: 0.5, y: fy, w: fw, roll, yaw, pitch, aspect: asp, mouthOpen: phase === 'mouth' ? 0.4 : talk * 0.5 });
   const cats = { eyeBlinkLeft: (Math.sin(s * 0.9) > 0.97) ? 0.9 : 0.02, eyeBlinkRight: (Math.sin(s * 0.9) > 0.97) ? 0.9 : 0.02,
     jawOpen: phase === 'mouth' || phase === 'namaste' ? 0 : talk, mouthSmileLeft: 0.3, mouthSmileRight: 0.3, mouthFunnel: 0 };
   raw.face = { landmarks: fl, cats };
