@@ -196,6 +196,39 @@ await sleep(900);
 await shot('13-faceonly');
 results.checks.faceOnly = true;
 
+// SELFIE FRAMING (the real phone case): hips out of frame + invisible, face
+// drives placement, and the ARMS must still switch the pose — v2.0 gated the
+// classifier on hips, so on a phone nothing ever happened.
+await page.selectOption('#cast-body', 'swapnil');
+await page.waitForFunction(() => window.__rangmanch.packs.swapnil.poses.wave, null, { timeout: 20000 }).catch(() => {});
+await page.evaluate(() => {
+  const R = window.__rangmanch;
+  R.state.mode = 'camera';
+  const P = [];
+  for (let i = 0; i < 33; i++) P.push({ x: 0.5, y: 0.5, z: 0, visibility: 0.05 });
+  const set = (i, x, y, v = 0.95) => { P[i] = { x, y, z: 0, visibility: v }; };
+  set(0, 0.5, 0.22);
+  set(11, 0.40, 0.34); set(12, 0.60, 0.34); set(13, 0.33, 0.52); set(14, 0.67, 0.52);
+  set(15, 0.30, 0.70); set(16, 0.70, 0.70);
+  set(23, 0.44, 1.05, 0.08); set(24, 0.56, 1.05, 0.08);
+  R.raw.pose = P;
+  window.__selfiePose = P;
+  const fl = []; for (let i = 0; i < 468; i++) fl.push({ x: 0.5, y: 0.3, z: 0 });
+  fl[33] = { x: 0.44, y: 0.28, z: 0 }; fl[263] = { x: 0.56, y: 0.28, z: 0 }; fl[1] = { x: 0.5, y: 0.315, z: 0 };
+  R.raw.face = { landmarks: fl, cats: { eyeBlinkLeft: 0, eyeBlinkRight: 0, jawOpen: 0.4, mouthSmileLeft: 0.1, mouthSmileRight: 0.1, mouthFunnel: 0 } };
+  R.raw.hands = [];
+});
+await sleep(900);
+await shot('16-selfie-base');
+await page.evaluate(() => {
+  const P = window.__selfiePose;
+  P[14] = { x: 0.72, y: 0.30, z: 0, visibility: 0.9 };
+  P[16] = { x: 0.70, y: 0.10, z: 0, visibility: 0.9 };
+});
+await sleep(1100);
+results.checks.poseSelfieWave = await page.evaluate(() => window.__rangmanch.state.poseName);
+await shot('17-selfie-wave');
+
 // recording round-trip (demo drives it)
 await page.selectOption('#cast-body', 'swapnil');
 await page.evaluate(() => { window.__rangmanch.state.mode = 'idle'; });

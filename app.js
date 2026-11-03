@@ -20,7 +20,7 @@ const statusModel = $('#status-model'), dotPose = $('#dot-pose'), dotHand = $('#
 const WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
 const MODEL = 'https://storage.googleapis.com/mediapipe-models';
 const PACKS_BASE = 'assets/packs/';
-const VERSION = '2.0.0';
+const VERSION = '2.0.1';
 
 /* ---------- cast ---------- */
 const CAST = [
@@ -373,9 +373,13 @@ function elbowAngle(a, b, c) {
 function classifyGesture() {
   const lm = state.pose, H = stage.height;
   if (!lm) return null;
-  for (const i of [11, 12, 13, 14, 15, 16, 23, 24]) if ((lm[i].visibility ?? 1) < 0.45) return null;
+  // Arms only. Hips are out of frame in the normal selfie framing — gating on
+  // them (v2.0) meant gestures never fired on a phone held at arm's length.
+  for (const i of [11, 12]) if ((lm[i].visibility ?? 1) < 0.45) return null;
+  for (const i of [13, 14, 15, 16]) if ((lm[i].visibility ?? 1) < 0.35) return null;
   const p = i => toPx(lm[i]);
-  const hipC = mid(p(23), p(24)), nose = p(0);
+  const hipsSeen = (lm[23].visibility ?? 1) > 0.45 && (lm[24].visibility ?? 1) > 0.45;
+  const hipC = hipsSeen ? mid(p(23), p(24)) : null, nose = p(0);
   const shoW = Math.max(30, Math.hypot(p(12).x - p(11).x, p(12).y - p(11).y));
   const mk = (si, ei, wi, hist) => {
     const sho = p(si), elb = p(ei), wri = p(wi);
@@ -394,7 +398,7 @@ function classifyGesture() {
   for (const h of state.hands) {
     if (!h[0] || !h[4] || !h[5] || !h[8]) continue;
     const w = toPx(h[0]), tt = toPx(h[4]), im = toPx(h[5]), it = toPx(h[8]);
-    if (tt.y < w.y - H * 0.03 && it.y > im.y - H * 0.01 && w.y < hipC.y + H * 0.12) return 'thumbs';
+    if (tt.y < w.y - H * 0.03 && it.y > im.y - H * 0.01 && w.y < (hipC ? hipC.y + H * 0.12 : H * 0.78)) return 'thumbs';
   }
   return null;
 }
@@ -452,10 +456,10 @@ function drawLead(now) {
   if (!state.fig) state.fig = makePlacementFilters();
   let tcx, tFeetY, th, troll, live = false;
   const lm = state.pose;
+  if (lm) updatePoseChoice(now); // gestures read the ARMS — they must run in every framing, selfie included
   const hipsVis = !!(lm && lm[23] && lm[24] && (lm[23].visibility ?? 1) > 0.5 && (lm[24].visibility ?? 1) > 0.5);
   if (lm && hipsVis && lm[11] && lm[12]) {
     // full/upper body: the figure stands where you stand, sized by your torso
-    updatePoseChoice(now);
     const neckC = mid(toPx(lm[11]), toPx(lm[12])), hipC = mid(toPx(lm[23]), toPx(lm[24]));
     const torsoLive = Math.max(26, Math.hypot(hipC.x - neckC.x, hipC.y - neckC.y));
     th = Math.max(H * 0.25, Math.min(H * 1.12, (G.H * torsoLive) / Math.max(60, G.hipY - G.neckY)));
@@ -567,17 +571,19 @@ function loop(ts) {
   const W = stage.width, H = stage.height;
   ctx.clearRect(0, 0, W, H);
   if (state.mode === 'camera' && cam.readyState >= 2) {
-    // your room stays as soft blurred colour. YOU are gone: fully replaced.
-    if (!state.bg) { state.bg = document.createElement('canvas'); state.bg.width = 192; state.bg.height = 108; }
+    // your room survives only as colour ambience. YOU are gone: fully replaced.
+    // The camera is crushed to 48x27 colour blobs before it is upscaled — at
+    // that resolution there is no face, no body, no silhouette left to see.
+    if (!state.bg) { state.bg = document.createElement('canvas'); state.bg.width = 48; state.bg.height = 27; }
     const bgc = state.bg.getContext('2d');
-    const vw = cam.videoWidth, vh = cam.videoHeight, s = Math.max(192 / vw, 108 / vh);
-    bgc.save(); bgc.translate(192, 0); bgc.scale(-1, 1);
-    bgc.drawImage(cam, (192 - vw * s) / 2, (108 - vh * s) / 2, vw * s, vh * s); bgc.restore();
+    const vw = cam.videoWidth, vh = cam.videoHeight, s = Math.max(48 / vw, 27 / vh);
+    bgc.save(); bgc.translate(48, 0); bgc.scale(-1, 1);
+    bgc.drawImage(cam, (48 - vw * s) / 2, (27 - vh * s) / 2, vw * s, vh * s); bgc.restore();
     ctx.save(); ctx.imageSmoothingEnabled = true;
-    ctx.filter = 'blur(16px)'; // backdrop is pure colour wash — nobody is recognisable in it
+    ctx.filter = 'blur(16px)';
     ctx.drawImage(state.bg, -24, -24, W + 48, H + 48);
     ctx.filter = 'none';
-    ctx.fillStyle = 'rgba(26,9,13,0.42)'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(26,9,13,0.55)'; ctx.fillRect(0, 0, W, H);
     const fg = ctx.createLinearGradient(0, H * 0.8, 0, H);
     fg.addColorStop(0, 'rgba(40,20,10,0)'); fg.addColorStop(1, 'rgba(40,20,10,0.55)');
     ctx.fillStyle = fg; ctx.fillRect(0, H * 0.8, W, H * 0.2); ctx.restore();
