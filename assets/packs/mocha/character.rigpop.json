@@ -1,0 +1,62 @@
+{
+  "spec": 1,
+  "id": "mocha",
+  "name": "Mocha the Cat",
+  "author": "Swapnil Agrawal",
+  "license": "MIT",
+  "talk": {
+    "canvas": {
+      "w": 720,
+      "h": 936
+    },
+    "base": "talk/base.png",
+    "files": {
+      "A": "talk/A.png",
+      "O": "talk/O.png",
+      "E": "talk/E.png",
+      "blink": "talk/blink.png"
+    },
+    "patches": {
+      "A": {
+        "x": 291,
+        "y": 425,
+        "w": 110,
+        "h": 84
+      },
+      "O": {
+        "x": 291,
+        "y": 425,
+        "w": 110,
+        "h": 84
+      },
+      "E": {
+        "x": 291,
+        "y": 425,
+        "w": 110,
+        "h": 84
+      },
+      "blink": {
+        "x": 231,
+        "y": 338,
+        "w": 250,
+        "h": 64
+      }
+    },
+    "poses": {
+      "wave": "talk/pose_wave.png",
+      "point": "talk/pose_point.png",
+      "open": "talk/pose_open.png",
+      "thumbs": "talk/pose_thumbs.png"
+    }
+  },
+  "voice": {
+    "engine": "edge-tts",
+    "id": "en-IN-AashiNeural",
+    "preset": "aashi"
+  },
+  "style": {
+    "bible": "chubby orange cat in a teal hoodie, bold black outlines, flat colours, cream background energy",
+    "palette": [],
+    "outfit": ""
+  }
+}

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rangmanch AR — Ek Camera, Poori Cartoon Film</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <div class="title-block">
+    <h1>🎭 Rangmanch <span class="ar">AR</span></h1>
+    <p class="tagline">Act karo, animate mat karo — your body is the cartoon. One person, every character, live in your room.</p>
+  </div>
+  <div class="status-block">
+    <div class="pill" id="status-model">Models: loading…</div>
+    <div class="trackers">
+      <span class="dot" id="dot-pose"></span> Body
+      <span class="dot" id="dot-hand"></span> Hands
+      <span class="dot" id="dot-face"></span> Face
+      <span class="fps" id="fps"></span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="stage-wrap">
+    <canvas id="stage" width="1280" height="720"></canvas>
+    <video id="cam" playsinline muted hidden></video>
+    <div class="stage-msg" id="stage-msg">Pick a cast, then start the camera — ya Demo Mode dabao bina camera ke dekhne ke liye.</div>
+  </section>
+
+  <section class="controls">
+    <div class="row">
+      <button id="btn-camera" class="primary">📷 Start Camera</button>
+      <button id="btn-demo">🪄 Demo Mode</button>
+      <button id="btn-record" disabled>⏺ Record Scene</button>
+      <a id="download" class="download" hidden>⬇ Download film</a>
+    </div>
+    <div class="row cast">
+      <label>🧍 Body cast
+        <select id="cast-body"></select>
+      </label>
+      <label>✋ Left-hand cast
+        <select id="cast-left"></select>
+      </label>
+      <label>🤚 Right-hand cast
+        <select id="cast-right"></select>
+      </label>
+    </div>
+  </section>
+
+  <section class="guide">
+    <h2>Kaise act karein</h2>
+    <ul>
+      <li><b>Ek haath upar</b> — main character wave karega · <b>dono haath upar</b> — open pose</li>
+      <li><b>Haath side mein failao</b> — point pose · <b>normal khade raho</b> — base pose</li>
+      <li><b>Munh kholo / O banao / smile karo</b> — character ka munh tumhare munh ke saath chalega (A / O / E), palak jhapkao toh woh bhi jhapkayega</li>
+      <li><b>Haathon ko camera ke paas lao</b> — har haath ek chhota character ban jayega; <b>angootha-ungli milao (pinch)</b> toh woh bolega</li>
+      <li><b>Record Scene</b> — tumhari awaaz mic se, film canvas se, ek saath record hogi</li>
+    </ul>
+    <p class="privacy">🔒 Sab kuch on-device chalta hai — Pose, Hand aur Face models tumhare phone/browser ke andar hi hain. Koi video kahin upload nahi hoti.</p>
+  </section>
+</main>
+
+<footer>Build Your First AI App 2026 · Rangmanch AR v0.1 · Characters: Rigpop Forge packs · Tracking: MediaPipe (on-device)</footer>
+<script type="module" src="app.js"></script>
+</body>
+</html>

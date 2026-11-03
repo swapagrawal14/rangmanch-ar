@@ -1,0 +1,114 @@
+{
+  "spec": 1,
+  "id": "swapnil",
+  "name": "Swapnil Agrawal",
+  "author": "Swapnil Agrawal",
+  "license": "MIT",
+  "talk": {
+    "canvas": {
+      "w": 720,
+      "h": 936
+    },
+    "base": "talk/base.png",
+    "files": {
+      "A": "talk/A.png",
+      "O": "talk/O.png",
+      "E": "talk/E.png",
+      "blink": "talk/blink.png"
+    },
+    "patches": {
+      "A": {
+        "x": 349,
+        "y": 253,
+        "w": 58,
+        "h": 40
+      },
+      "O": {
+        "x": 349,
+        "y": 253,
+        "w": 58,
+        "h": 40
+      },
+      "E": {
+        "x": 349,
+        "y": 253,
+        "w": 58,
+        "h": 40
+      },
+      "blink": {
+        "x": 308,
+        "y": 186,
+        "w": 140,
+        "h": 30
+      }
+    },
+    "poses": {
+      "wave": "talk/pose_wave.png",
+      "point": "talk/pose_point.png",
+      "open": "talk/pose_open.png",
+      "thumbs": "talk/pose_thumbs.png"
+    },
+    "poseAnchors": {
+      "base": {
+        "mouth": [
+          377,
+          264
+        ],
+        "eyes": [
+          387,
+          193
+        ]
+      },
+      "wave": {
+        "mouth": [
+          392,
+          273
+        ],
+        "eyes": [
+          390,
+          202
+        ]
+      },
+      "point": {
+        "mouth": [
+          248,
+          256
+        ],
+        "eyes": [
+          259,
+          201
+        ]
+      },
+      "open": {
+        "mouth": [
+          367,
+          312
+        ],
+        "eyes": [
+          365,
+          245
+        ]
+      },
+      "thumbs": {
+        "mouth": [
+          363,
+          283
+        ],
+        "eyes": [
+          364,
+          206
+        ]
+      }
+    }
+  },
+  "voice": {
+    "engine": "edge-tts",
+    "id": "en-IN-NeerjaExpressiveNeural",
+    "preset": "neerja"
+  },
+  "style": {
+    "bible": "bold marker illustration, cobalt-blue outlines, denim shirt dress, long wavy hair, the creator herself",
+    "palette": [],
+    "outfit": ""
+  }
+}

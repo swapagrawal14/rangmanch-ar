@@ -1,0 +1,62 @@
+{
+  "spec": 1,
+  "id": "bunty",
+  "name": "Bunty the Bot",
+  "author": "Swapnil Agrawal",
+  "license": "MIT",
+  "talk": {
+    "canvas": {
+      "w": 720,
+      "h": 936
+    },
+    "base": "talk/base.png",
+    "files": {
+      "A": "talk/A.png",
+      "O": "talk/O.png",
+      "E": "talk/E.png",
+      "blink": "talk/blink.png"
+    },
+    "patches": {
+      "A": {
+        "x": 310,
+        "y": 440,
+        "w": 100,
+        "h": 76
+      },
+      "O": {
+        "x": 310,
+        "y": 440,
+        "w": 100,
+        "h": 76
+      },
+      "E": {
+        "x": 310,
+        "y": 440,
+        "w": 100,
+        "h": 76
+      },
+      "blink": {
+        "x": 239,
+        "y": 353,
+        "w": 240,
+        "h": 70
+      }
+    },
+    "poses": {
+      "wave": "talk/pose_wave.png",
+      "point": "talk/pose_point.png",
+      "open": "talk/pose_open.png",
+      "thumbs": "talk/pose_thumbs.png"
+    }
+  },
+  "voice": {
+    "engine": "edge-tts",
+    "id": "en-IN-PrabhatNeural",
+    "preset": "prabhat"
+  },
+  "style": {
+    "bible": "friendly teal robot with a dark screen face and cyan glowing eyes, bold outlines, flat colours",
+    "palette": [],
+    "outfit": ""
+  }
+}
