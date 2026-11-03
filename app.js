@@ -12,7 +12,7 @@ const cam = $('#cam'), msgEl = $('#stage-msg');
 const btnCam = $('#btn-camera'), btnDemo = $('#btn-demo'), btnRec = $('#btn-record'), btnRetake = $('#btn-retake');
 const downloadA = $('#download'), btnReel = $('#btn-reel');
 const selLead = $('#cast-body'), selLeft = $('#cast-left'), selRight = $('#cast-right');
-const selQuality = $('#quality'), captionInput = $('#caption-input');
+const selQuality = $('#quality'), captionInput = $('#caption-input'), chkCo = $('#coactors');
 const statusModel = $('#status-model'), dotPose = $('#dot-pose'), dotHand = $('#dot-hand'), dotFace = $('#dot-face'), fpsEl = $('#fps');
 
 const WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
@@ -123,8 +123,47 @@ function buildRig(pack) {
       if (data[j + 3] < 40) { const syp = Math.max(0, y - Math.round(170 * sy)); j = (syp * W + sxp) * 4; } // hair falls from above
       od[i] = data[j]; od[i + 1] = data[j + 1]; od[i + 2] = data[j + 2]; od[i + 3] = data[j + 3];
     }
+    // head erase: only skin/face tones are repainted (with hair sampled sideways),
+    // so when the head piece turns, hair shows behind the face — no streaks, no halo.
+    const NL = Math.round(351 * sy), FH = Math.round(14 * sy);
+    const snap = new Uint8ClampedArray(od);
+    const cxImg = Math.round(372 * sx);
+    for (let y = 0; y < Math.min(H, NL + FH); y++) {
+      const f = Math.max(0, Math.min(1, (NL + FH - y) / (2 * FH)));
+      if (f <= 0.02) continue;
+      for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 4;
+        if (snap[i + 3] < 30) continue;
+        const r = snap[i], b = snap[i + 2];
+        if (!(r > 120 && r > b + 18)) continue; // hair, dress, outlines stay untouched
+        const dir = x < cxImg ? -1 : 1;
+        let sxp = Math.max(0, Math.min(W - 1, x + dir * Math.round(70 * sx)));
+        let j = (y * W + sxp) * 4;
+        if (snap[j + 3] < 30) { sxp = Math.max(0, Math.min(W - 1, x - dir * Math.round(70 * sx))); j = (y * W + sxp) * 4; }
+        const sr = snap[j + 3] < 30 ? 58 : snap[j], sg = snap[j + 3] < 30 ? 44 : snap[j + 1], sb = snap[j + 3] < 30 ? 40 : snap[j + 2];
+        od[i] = Math.round(sr * f + snap[i] * (1 - f));
+        od[i + 1] = Math.round(sg * f + snap[i + 1] * (1 - f));
+        od[i + 2] = Math.round(sb * f + snap[i + 2] * (1 - f));
+        od[i + 3] = Math.max(snap[i + 3], Math.round((snap[j + 3] < 30 ? 255 : snap[j + 3]) * f));
+      }
+    }
     const erased = document.createElement('canvas'); erased.width = W; erased.height = H;
     erased.getContext('2d').putImageData(out, 0, 0);
+    // head piece: everything above the neck line, feathered at the junction
+    const headBox = [120 / 720 * W, 0, 630 / 720 * W, 392 / 936 * H];
+    const hw = Math.round(headBox[2] - headBox[0]), hh = Math.round(headBox[3] - headBox[1]);
+    const headC = document.createElement('canvas'); headC.width = hw; headC.height = hh;
+    const hctx = headC.getContext('2d', { willReadFrequently: true });
+    hctx.drawImage(img, -headBox[0], -headBox[1]);
+    const hid = hctx.getImageData(0, 0, hw, hh), hd = hid.data;
+    for (let y = 0; y < hh; y++) {
+      const gy = y + headBox[1];
+      const f = Math.max(0, Math.min(1, (NL + FH - gy) / (2 * FH)));
+      if (f >= 0.999) continue;
+      for (let x = 0; x < hw; x++) { const i = (y * hw + x) * 4 + 3; hd[i] = Math.round(hd[i] * f); }
+    }
+    hctx.putImageData(hid, 0, 0);
+    const head = { img: headC, box: headBox, pivot: [372 / 720 * W, 338 / 936 * H] };
     const strips = {};
     for (const name of Object.keys(RIG_BONES)) {
       const [fk, tk] = RIG_BONES[name], a = J[fk], b = J[tk], bf = RIG_SEG_BOX[name];
@@ -142,7 +181,7 @@ function buildRig(pack) {
       cctx.putImageData(idd, 0, 0);
       strips[name] = { img: c, box, from: a, to: b };
     }
-    pack.rig = { erased, strips, J, W, H };
+    pack.rig = { erased, strips, head, J, W, H };
     return pack.rig;
   } catch (e) { pack.rigFailed = true; return null; }
 }
@@ -244,12 +283,26 @@ function toPx(p) { return { x: (1 - p.x) * stage.width, y: p.y * stage.height };
 function mid(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
 function faceState() {
   const c = (state.face && state.face.cats) || {};
-  const blink = ((c.eyeBlinkLeft || 0) + (c.eyeBlinkRight || 0)) / 2 > 0.55;
+  const blink = ((c.eyeBlinkLeft || 0) + (c.eyeBlinkRight || 0)) / 2 > 0.5;
+  const smile = ((c.mouthSmileLeft || 0) + (c.mouthSmileRight || 0)) / 2, jaw = c.jawOpen || 0;
   let mouth = null;
-  if ((c.jawOpen || 0) > 0.32) mouth = 'mouthA';
-  else if ((c.mouthFunnel || 0) > 0.35) mouth = 'mouthO';
-  else if (((c.mouthSmileLeft || 0) + (c.mouthSmileRight || 0)) / 2 > 0.38) mouth = 'mouthE';
-  return { blink, mouth };
+  if (jaw > 0.22) mouth = 'mouthA';
+  else if ((c.mouthFunnel || 0) > 0.3) mouth = 'mouthO';
+  else if (smile > 0.34) mouth = 'mouthE';
+  const wide = smile > 0.45 && jaw > 0.1; // laughing: big grin wins over a plain A
+  if (wide) mouth = 'mouthE';
+  return { blink, mouth, wide };
+}
+function headPose() {
+  const fl = state.face && state.face.landmarks;
+  if (!fl || !fl[1] || !fl[33] || !fl[263]) return { yaw: 0, pitch: 0, roll: 0 };
+  const nose = toPx(fl[1]), eR = toPx(fl[33]), eL = toPx(fl[263]);
+  const eyeMid = mid(eR, eL), eyeDist = Math.max(10, Math.hypot(eL.x - eR.x, eL.y - eR.y));
+  return {
+    yaw: Math.max(-1, Math.min(1, (nose.x - eyeMid.x) / (eyeDist * 0.55))),
+    pitch: Math.max(-0.8, Math.min(0.8, (nose.y - eyeMid.y) / eyeDist - 0.62)),
+    roll: Math.atan2(eL.y - eR.y, eL.x - eR.x)
+  };
 }
 function tileAt(pack, poseKey) {
   const a = pack.anchors;
@@ -274,7 +327,9 @@ function drawFaceTiles(pack, place) {
   }
   if (fs.mouth && pack.tiles[fs.mouth] && anch.mouth) {
     const p = place(anch.mouth[0], anch.mouth[1]);
-    const w = ((man.patches && man.patches[fs.mouth] && man.patches[fs.mouth].w) || 110) * place.scale;
+    let w = ((man.patches && man.patches[fs.mouth] && man.patches[fs.mouth].w) || 110) * place.scale;
+    if (place.wMul) w *= place.wMul;
+    if (fs.wide && fs.mouth === 'mouthE') w *= 1.2;
     drawTile(pack.tiles[fs.mouth], p.x, p.y, w, place.rot);
   }
 }
@@ -308,7 +363,9 @@ function drawLead() {
   const rig = RIG_PACKS.has(cast.lead) ? buildRig(pack) : null;
   if (rig) {
     const restTorso = (RIG_T.hip[1] - 351 / 936) * rig.H; // neck->hip in image px (295)
-    const k = torsoLen * 1.18 / restTorso;
+    // size from your full body span, so the character covers you completely
+    const ank = mid(P(27), P(28)), span = Math.max(60, ank.y - P(0).y);
+    const k = Math.max(span * 1.14 / rig.H, torsoLen * 1.02 / restTorso);
     const rel = i => {
       const p = P(i), d = restTorso * k;
       return { x: hip.x + (p.x - hip.x) / torsoLen * d, y: hip.y + (p.y - hip.y) / torsoLen * d };
@@ -320,12 +377,21 @@ function drawLead() {
     drawStrip(rig.strips.Rlo, rel(14), rel(16));
     drawStrip(rig.strips.Lup, rel(11), rel(13));
     drawStrip(rig.strips.Llo, rel(13), rel(15));
-    const place = (fx, fy) => {
+    // head: its own piece, so it can look where you look
+    const hp = headPose(), hrot = tilt + hp.roll * 0.85;
+    const torsoPt = (fx, fy) => {
       const dx = (fx - rig.J.hip[0]) * k, dy = (fy - rig.J.hip[1]) * k;
       const c = Math.cos(tilt), s = Math.sin(tilt);
       return { x: hip.x + dx * c - dy * s, y: hip.y + dx * s + dy * c };
     };
-    place.scale = k; place.rot = tilt;
+    if (rig.head) {
+      const pv = rig.head.pivot, pivLive = torsoPt(pv[0], pv[1]);
+      ctx.save(); ctx.translate(pivLive.x, pivLive.y); ctx.rotate(hrot);
+      ctx.scale(k * (1 - 0.35 * Math.abs(hp.yaw)), k);
+      ctx.drawImage(rig.head.img, -(pv[0] - rig.head.box[0]), -(pv[1] - rig.head.box[1])); ctx.restore();
+    }
+    const place = (fx, fy) => torsoPt(fx + hp.yaw * 30, fy + hp.pitch * 26);
+    place.scale = k; place.rot = hrot; place.wMul = 1 - 0.28 * Math.abs(hp.yaw);
     drawFaceTiles(pack, place);
   } else {
     const img = pack.img.base;
@@ -398,13 +464,22 @@ function loop(ts) {
   fitStage();
   if (state.mode === 'camera') infer();
   if (state.mode === 'demo') synthDemo(ts || 0);
-  smoothAll(state.mode === 'idle' ? 1 : 0.45);
+  smoothAll(state.mode === 'idle' ? 1 : 0.62);
   const W = stage.width, H = stage.height;
   ctx.clearRect(0, 0, W, H);
   if (state.mode === 'camera' && cam.readyState >= 2) {
-    const vw = cam.videoWidth, vh = cam.videoHeight, s = Math.max(W / vw, H / vh);
-    ctx.save(); ctx.translate(W, 0); ctx.scale(-1, 1);
-    ctx.drawImage(cam, (W - vw * s) / 2, (H - vh * s) / 2, vw * s, vh * s); ctx.restore();
+    // your room stays — as soft blurred colour. YOU are gone: fully replaced.
+    if (!state.bg) { state.bg = document.createElement('canvas'); state.bg.width = 192; state.bg.height = 108; }
+    const bgc = state.bg.getContext('2d');
+    const vw = cam.videoWidth, vh = cam.videoHeight, s = Math.max(192 / vw, 108 / vh);
+    bgc.save(); bgc.translate(192, 0); bgc.scale(-1, 1);
+    bgc.drawImage(cam, (192 - vw * s) / 2, (108 - vh * s) / 2, vw * s, vh * s); bgc.restore();
+    ctx.save(); ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(state.bg, 0, 0, W, H);
+    ctx.fillStyle = 'rgba(26,9,13,0.30)'; ctx.fillRect(0, 0, W, H);
+    const fg = ctx.createLinearGradient(0, H * 0.8, 0, H);
+    fg.addColorStop(0, 'rgba(40,20,10,0)'); fg.addColorStop(1, 'rgba(40,20,10,0.55)');
+    ctx.fillStyle = fg; ctx.fillRect(0, H * 0.8, W, H * 0.2); ctx.restore();
   } else {
     const g = ctx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, '#3d1522'); g.addColorStop(0.75, '#2b1219'); g.addColorStop(1, '#59331f');
@@ -412,7 +487,7 @@ function loop(ts) {
     ctx.fillStyle = '#6d4423'; ctx.fillRect(0, H * 0.94, W, H * 0.06);
   }
   drawLead();
-  if (state.mode !== 'idle') drawCoActors(ts || 0);
+  if (state.mode !== 'idle' && chkCo.checked) drawCoActors(ts || 0);
   if (captionInput.value.trim()) {
     const txt = captionInput.value.trim();
     ctx.save(); ctx.font = `700 ${Math.round(H * 0.045)}px 'Space Grotesk', sans-serif`;
@@ -443,14 +518,14 @@ btnCam.addEventListener('click', async () => {
     cam.srcObject = stream; await cam.play();
     state.stream = stream; state.mode = 'camera';
     btnCam.textContent = '📷 Camera On ✅'; btnDemo.textContent = '🪄 Demo Mode'; btnRec.disabled = false;
-    setMsg('You are live! Move — the lead character IS you now. Raise a hand and your co-actors walk in.');
+    setMsg('You are live — and fully replaced. Look around, talk, laugh, dance: the character does it all with you.');
   } catch (e) { setMsg('Camera blocked: ' + e.message + ' — try Demo Mode instead.'); }
 });
 btnDemo.addEventListener('click', () => {
   state.mode = state.mode === 'demo' ? 'idle' : 'demo';
   btnDemo.textContent = state.mode === 'demo' ? '🪄 Stop Demo' : '🪄 Demo Mode';
   btnRec.disabled = state.mode === 'idle';
-  setMsg(state.mode === 'demo' ? 'Demo Mode: a virtual performer drives the cast — watch the lead wave back. (The real magic needs your camera.)' : '');
+  setMsg(state.mode === 'demo' ? 'Demo Mode: a virtual performer drives the lead — watch it wave back. (The real magic needs your camera.)' : '');
 });
 selQuality.addEventListener('change', () => { state.quality = selQuality.value; });
 btnReel.addEventListener('click', () => {

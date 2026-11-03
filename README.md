@@ -58,9 +58,11 @@ and camera-shy creator who can act but cannot animate.
 | You do this | The stage does this |
 |---|---|
 | Wave, dance, crouch, lean, walk | The lead's arms, torso and head follow **your** skeleton, bone by bone — it is not swapping pose pictures, it is wearing your movement |
-| Open your mouth / make an O / smile | Lead's mouth becomes **A / O / E** — the Rigpop Talk patches, composited live |
+| Turn your head / look up or down | The lead's head turns and tilts with yours (its own head piece, foreshortened as it turns) |
+| Open your mouth / make an O / smile / laugh | Lead's mouth becomes **A / O / E** — laugh gets the big grin — the Rigpop Talk patches, composited live |
 | Blink | Lead blinks |
-| Raise a hand into frame | A full-size co-actor walks onto the stage floor on that side |
+| Stand in front of the camera | You are never shown: your room blurs into backdrop colour and the character replaces you completely, at your size |
+| Tick *Co-actors*, raise a hand | A full-size co-actor walks onto the stage floor on that side (off by default — the stage is yours alone) |
 | Move your hand around | The co-actor walks with it |
 | Pinch thumb + finger | The co-actor talks (its O-mouth fires) |
 | Type a caption, hit Record | Film + your mic voice record together, caption burned in |
@@ -144,6 +146,7 @@ README visuals are generated from the packs' real art by
 - [x] v0.2 — theatre-grade UI (marquee, curtains, casting cards, playbill)
 - [x] v0.3 — all 16 packs, smoothing, quality toggle, 9:16 reel mode, captions, record timer + retake
 - [x] v0.4 — **You Become the Character**: live puppet rig (bone-by-bone conversion, no pose swaps), full-size stage co-actors conducted by your hands, all-English UI
+- [x] v0.5 — **Total Replacement**: raw camera self is never drawn (room becomes blurred backdrop colour), character sized to fully cover you, separate head piece that turns/tilts with your gaze, laugh-sensitive mouth, co-actors off by default
 - [ ] Per-character voice pitch for takes, scene list / multi-take editor
 - [ ] Vendored models for a fully offline build
 - [ ] The demo reel: *Germ vs Toothbrush*, performed entirely inside Rangmanch
