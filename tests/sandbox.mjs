@@ -47,9 +47,9 @@ await page.waitForFunction(() => window.__rangmanch && window.__rangmanch.packs.
 results.checks.packLoaded = await page.evaluate(() => !!(window.__rangmanch.packs.swapnil && window.__rangmanch.packs.swapnil.img.base));
 results.checks.tilesLoaded = await page.evaluate(() => ['A', 'O', 'E', 'blink'].every(k => !!window.__rangmanch.packs.swapnil.tiles[k]));
 const t0 = Date.now();
-await page.waitForFunction(() => window.__rangmanch.packs.swapnil.rig, null, { timeout: 30000 }).catch(() => {});
-results.checks.rigBuilt = await page.evaluate(() => !!window.__rangmanch.packs.swapnil.rig);
-results.checks.rigMs = Date.now() - t0;
+await page.waitForFunction(() => window.__rangmanch.packs.swapnil.poses.wave, null, { timeout: 30000 }).catch(() => {});
+results.checks.posesLoaded = await page.evaluate(() => !!window.__rangmanch.packs.swapnil.poses.wave);
+results.checks.loadMs = Date.now() - t0;
 await sleep(600);
 await shot('01-idle');
 
@@ -75,9 +75,10 @@ await page.evaluate(() => {
   R.raw.pose = P;
   const fl = []; for (let i = 0; i < 468; i++) fl.push({ x: 0.5, y: 0.3, z: 0 });
   fl[1] = { x: 0.5, y: 0.315, z: 0 }; fl[33] = { x: 0.465, y: 0.30, z: 0 }; fl[263] = { x: 0.535, y: 0.30, z: 0 };
-  R.raw.face = { landmarks: fl, cats: { eyeBlinkLeft: 0, eyeBlinkRight: 0, jawOpen: 0, mouthSmileLeft: 0, mouthSmileRight: 0, mouthFunnel: 0 } };
+  const cats = { eyeBlinkLeft: 0, eyeBlinkRight: 0, jawOpen: 0, mouthSmileLeft: 0, mouthSmileRight: 0, mouthFunnel: 0, mouthPucker: 0, mouthStretchLeft: 0 };
+  R.raw.face = { landmarks: fl, cats };
   R.raw.hands = [];
-  window.__setPose = fn => fn(P, fl, R.raw.face.cats);
+  window.__setPose = fn => fn(P, fl, cats);
 });
 await sleep(900);
 await shot('04-synth-rest');
@@ -87,6 +88,7 @@ await page.evaluate(() => window.__setPose((P, fl, cats) => {
   cats.jawOpen = 0.6;
 }));
 await sleep(900);
+results.checks.poseWave = await page.evaluate(() => window.__rangmanch.state.poseName);
 await shot('05-synth-wave-talk');
 // look screen-left + laugh (in mirrored view, nose landmark x smaller => nose appears right of eye mid after flip; test both signs visually)
 await page.evaluate(() => window.__setPose((P, fl, cats) => {
@@ -104,6 +106,29 @@ await page.evaluate(() => window.__setPose((P, fl, cats) => {
 }));
 await sleep(700);
 await shot('07-synth-blink');
+// gesture classifier: one straight arm out to the side => point pose
+await page.evaluate(() => window.__setPose(P => {
+  const set = (i, x, y) => { P[i] = { x, y, z: 0, visibility: 1 }; };
+  set(13, 0.33, 0.305); set(15, 0.19, 0.30);
+}));
+await sleep(1000);
+results.checks.posePoint = await page.evaluate(() => window.__rangmanch.state.poseName);
+await shot('14-synth-point');
+// both arms raised => open pose
+await page.evaluate(() => window.__setPose(P => {
+  const set = (i, x, y) => { P[i] = { x, y, z: 0, visibility: 1 }; };
+  set(13, 0.37, 0.21); set(15, 0.30, 0.12); set(14, 0.63, 0.21); set(16, 0.70, 0.12);
+}));
+await sleep(1000);
+results.checks.poseOpen = await page.evaluate(() => window.__rangmanch.state.poseName);
+await shot('15-synth-open');
+// arms back down => base pose again
+await page.evaluate(() => window.__setPose(P => {
+  const set = (i, x, y) => { P[i] = { x, y, z: 0, visibility: 1 }; };
+  set(13, 0.40, 0.45); set(15, 0.38, 0.60); set(14, 0.60, 0.45); set(16, 0.62, 0.60);
+}));
+await sleep(1000);
+results.checks.poseBackToBase = await page.evaluate(() => window.__rangmanch.state.poseName);
 // portrait close-up: hips/ankles off-frame
 await page.evaluate(() => window.__setPose((P, fl, cats) => {
   cats.eyeBlinkLeft = 0; cats.eyeBlinkRight = 0;
@@ -138,13 +163,8 @@ await page.click('#btn-reel');
 // second rig pack end-to-end (sanjay: different art, kurta body)
 await page.evaluate(() => { window.__rangmanch.state.mode = 'idle'; });
 await page.selectOption('#cast-body', 'sanjay');
-await page.waitForFunction(() => window.__rangmanch.packs.sanjay && window.__rangmanch.packs.sanjay.rig, null, { timeout: 30000 }).catch(() => {});
-results.checks.rigJ = await page.evaluate(() => {
-  const J = window.__rangmanch.packs.swapnil.rig.J;
-  const r = p => p.map(v => Math.round(v));
-  return { shoR: r(J.shoR), elbR: r(J.elbR), wriR: r(J.wriR), shoL: r(J.shoL), elbL: r(J.elbL), wriL: r(J.wriL) };
-});
-results.checks.sanjayRig = await page.evaluate(() => !!window.__rangmanch.packs.sanjay.rig);
+await page.waitForFunction(() => window.__rangmanch.packs.sanjay && window.__rangmanch.packs.sanjay.poses.wave, null, { timeout: 30000 }).catch(() => {});
+results.checks.sanjayPoses = await page.evaluate(() => !!window.__rangmanch.packs.sanjay.poses.wave);
 await page.evaluate(() => {
   window.__rangmanch.state.mode = 'camera'; document.querySelector('#coactors').checked = false;
   // reset to the centred rest performer (demo's last face may be mid-glance)

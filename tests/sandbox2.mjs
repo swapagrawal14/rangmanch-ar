@@ -46,14 +46,14 @@ await page.route('https://storage.googleapis.com/mediapipe-models/**', route => 
 page.on('console', m => { if (m.type() === 'error') out.errors.push(m.text().slice(0, 200)); });
 page.on('pageerror', e => out.errors.push('pageerror: ' + String(e).slice(0, 200)));
 await page.goto('http://localhost:8903/', { waitUntil: 'networkidle' }).catch(() => {});
-await page.waitForFunction(() => window.__rangmanch && window.__rangmanch.packs.swapnil && window.__rangmanch.packs.swapnil.rig, null, { timeout: 30000 }).catch(() => {});
+await page.waitForFunction(() => window.__rangmanch && window.__rangmanch.packs.swapnil && window.__rangmanch.packs.swapnil.poses.wave, null, { timeout: 30000 }).catch(() => {});
 
-// rig build time on a fresh pack (seema), measured inside the page
-out.checks.rigBuildMs = await page.evaluate(async () => {
+// geometry scan time on a fresh pack (seema), measured inside the page
+out.checks.geomMs = await page.evaluate(async () => {
   const p = await window.__rangmanch.ensurePack('seema');
   const t = performance.now();
-  await window.__rangmanch.buildRigAsync(p);
-  return { ms: Math.round(performance.now() - t), built: !!p.rig, failed: p.rigFailed };
+  const g = window.__rangmanch.packGeom(p);
+  return { ms: Math.round(performance.now() - t), built: !!(g && g.bbox) };
 });
 
 // real models + fake camera
@@ -80,7 +80,7 @@ if (out.checks.modelsReady) {
 const mob = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 mob.on('pageerror', e => out.errors.push('mobile pageerror: ' + String(e).slice(0, 200)));
 await mob.goto('http://localhost:8903/', { waitUntil: 'networkidle' }).catch(() => {});
-await mob.waitForFunction(() => window.__rangmanch && window.__rangmanch.packs.swapnil && window.__rangmanch.packs.swapnil.rig, null, { timeout: 30000 }).catch(() => {});
+await mob.waitForFunction(() => window.__rangmanch && window.__rangmanch.packs.swapnil && window.__rangmanch.packs.swapnil.poses.wave, null, { timeout: 30000 }).catch(() => {});
 await mob.click('#btn-demo');
 await sleep(2200);
 await mob.screenshot({ path: path.join(SHOTS, '21-mobile.png'), fullPage: true });

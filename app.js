@@ -1,13 +1,12 @@
 'use strict';
-/* Rangmanch AR v1.0 — one-person cartoon studio.
-   You stand in front of the camera and are completely replaced by a Rigpop
-   character: at cast time the app estimates the character's skeleton from its
-   own face geometry (the same math as Rigpop Forge's WowKit exporter), cuts
-   its arms and head out of the artwork as feathered pieces, fills the holes,
-   and then re-poses the puppet from your MediaPipe skeleton every frame.
-   Your gaze turns its head; your mouth and blinks drive its face tiles.
-   Your room is only ever shown as blurred colour — you are never on screen.
-   Everything runs on-device. */
+/* Rangmanch AR v2.0 — one-person cartoon studio.
+   You act; the character performs. The lead is the pack's own authored art —
+   complete gesture poses drawn on one canvas — switched by a gesture
+   classifier reading your MediaPipe pose, while your face blendshapes drive
+   the A/O/E/blink tiles at each pose's hand-measured anchors (the compositing
+   the family pilot proved). The figure follows your torso; breath, bob and
+   blink timers keep it alive; bad tracking is refused, never drawn. Your room
+   is only ever blurred colour — you are never on screen. On-device only. */
 
 const $ = s => document.querySelector(s);
 const stage = $('#stage'), ctx = stage.getContext('2d');
@@ -21,7 +20,7 @@ const statusModel = $('#status-model'), dotPose = $('#dot-pose'), dotHand = $('#
 const WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
 const MODEL = 'https://storage.googleapis.com/mediapipe-models';
 const PACKS_BASE = 'assets/packs/';
-const VERSION = '1.0.1';
+const VERSION = '2.0.0';
 
 /* ---------- cast ---------- */
 const CAST = [
@@ -31,12 +30,7 @@ const CAST = [
   ['bubbles', 'Bubbles'], ['luna', 'Luna'], ['puni', 'Puni'], ['static', 'Static'],
   ['doodle-swapnil', 'Doodle Swapnil']
 ];
-/* Full-body humanoid packs get the live puppet rig. The rest play as anchored
-   figures (and shine as co-actors). */
-const RIG_PACKS = new Set(['swapnil', 'doodle-swapnil', 'sanjay', 'seema', 'bhavishy',
-  'solana', 'rafi', 'kiko', 'mira', 'bubbles', 'luna', 'static']);
-
-const packs = {};   // id -> {manifest, img, tiles, face, rig, rigPromise}
+const packs = {};   // id -> {manifest, img, tiles, face, poses, anchors}
 const cast = { lead: 'swapnil', leftHand: 'mocha', rightHand: 'bunty' };
 
 function loadImage(src) {
@@ -62,7 +56,13 @@ async function ensurePack(id) {
   const face = {};
   for (const key of ['A', 'O', 'E']) if (patches[key]) face[key] = { c: (anchBase && anchBase.mouth) || centre(patches[key]), w: patches[key].w };
   if (patches.blink) face.blink = { c: (anchBase && anchBase.eyes) || centre(patches.blink), w: patches.blink.w };
-  packs[id] = { manifest, img, tiles, face, rig: null, rigPromise: null, rigFailed: false };
+  // the authored gesture poses — complete drawings, same canvas/floor line
+  const poses = {};
+  const poseFiles = talk.poses || {};
+  for (const key of ['wave', 'point', 'open', 'thumbs']) {
+    if (poseFiles[key]) { try { poses[key] = await loadImage(base + poseFiles[key]); } catch (e) { /* none */ } }
+  }
+  packs[id] = { manifest, img, tiles, face, poses, anchors: talk.poseAnchors || {} };
   return packs[id];
 }
 function updateThumb(role, id) {
@@ -77,272 +77,71 @@ async function fillCastSelects() {
   selLead.value = cast.lead; selLeft.value = cast.leftHand; selRight.value = cast.rightHand;
   for (const [id] of CAST) { try { await ensurePack(id); } catch (e) { /* offline pack */ } }
   updateThumb('body', cast.lead); updateThumb('left', cast.leftHand); updateThumb('right', cast.rightHand);
-  const lead = packs[cast.lead];
-  if (lead && RIG_PACKS.has(cast.lead)) buildRigAsync(lead);
 }
 selLead.addEventListener('change', async () => {
   cast.lead = selLead.value;
-  const p = await ensurePack(cast.lead); updateThumb('body', cast.lead);
-  if (RIG_PACKS.has(cast.lead)) buildRigAsync(p);
+  await ensurePack(cast.lead); updateThumb('body', cast.lead);
+  state.poseName = 'base'; state.candName = null; state.candCount = 0; state.figInit = false;
 });
 selLeft.addEventListener('change', async () => { cast.leftHand = selLeft.value; await ensurePack(cast.leftHand); updateThumb('left', cast.leftHand); });
 selRight.addEventListener('change', async () => { cast.rightHand = selRight.value; await ensurePack(cast.rightHand); updateThumb('right', cast.rightHand); });
 
-/* ---------- skeleton estimation (Forge WowKit math, from face geometry) ---------- */
-function estimateJoints(manifest, bbox, W, H) {
-  const patches = (manifest.talk || {}).patches || {};
-  const blink = patches.blink, mouth = patches.A;
-  if (!blink || !mouth || !bbox) return null;
-  const top = bbox.y, bottom = bbox.y + bbox.h;
-  const faceCx = blink.x + blink.w / 2;
-  const eyeY = blink.y + blink.h / 2;
-  const mouthY = mouth.y + mouth.h / 2;
-  const faceW = blink.w * 1.55;
-  const headTopEst = Math.max(top, eyeY - faceW * 0.52);
-  const chin = mouthY + faceW * 0.30;
-  const headH = Math.max(24, chin - headTopEst);
-  const neckY = chin + headH * 0.06;
-  const shoulderY = neckY + headH * 0.24;
-  const shoulderHalf = faceW * 0.60;
-  const hipY = top + (bottom - top) * 0.54;
-  const elbowDY = headH * 0.92, handDY = headH * 0.88;
-  return {
-    faceCx, faceW, headH, chin, eyeY,
-    neck: [faceCx, neckY], hip: [faceCx, hipY],
-    shoR: [faceCx - shoulderHalf, shoulderY], elbR: [faceCx - shoulderHalf * 1.12, shoulderY + elbowDY], wriR: [faceCx - shoulderHalf * 1.18, shoulderY + elbowDY + handDY],
-    shoL: [faceCx + shoulderHalf, shoulderY], elbL: [faceCx + shoulderHalf * 1.12, shoulderY + elbowDY], wriL: [faceCx + shoulderHalf * 1.18, shoulderY + elbowDY + handDY],
-    shoulderDist: shoulderHalf * 2,
-    headPivot: [faceCx, chin - headH * 0.04],
-    headBox: [Math.max(0, faceCx - faceW * 1.18), Math.max(0, top - 4), Math.min(W, faceCx + faceW * 1.18), Math.min(H, chin + headH * 0.38)],
-    ellipse: [faceCx, eyeY + headH * 0.18, faceW * 0.48, headH * 0.53]
-  };
+/* Pack geometry from the REAL data files. v2.0 does not cut the illustration
+   at all (the research verdict: nobody ships a runtime cut-up of a finished
+   drawing) — the puppet is the pack's own authored drawings. Geometry is only
+   PLACEMENT math: face proportions from the talk patches (WowKit), figure
+   bounds from a single alpha scan of the base art. */
+const geomCache = new WeakMap();
+function packGeom(pack) {
+  if (geomCache.has(pack)) return geomCache.get(pack);
+  const t = pack.manifest.talk || {}, cv = t.canvas || { w: 720, h: 936 };
+  const W = cv.w, H = cv.h, img = pack.img.base;
+  let bbox = { x0: 0, y0: 0, x1: W, y1: H };
+  try {
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(img, 0, 0, W, H);
+    const d = g.getImageData(0, 0, W, H).data;
+    let x0 = W, y0 = H, x1 = 0, y1 = 0;
+    for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) {
+      if (d[(y * W + x) * 4 + 3] > 12) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    }
+    if (x1 > x0 && y1 > y0) bbox = { x0, y0, x1, y1 };
+  } catch (e) { /* keep full canvas */ }
+  const pat = t.patches || {};
+  const aB = (t.poseAnchors || {}).base || {};
+  const faceCx = aB.eyes ? aB.eyes[0] : (W / 2);
+  const eyeY = aB.eyes ? aB.eyes[1] : (bbox.y0 + (bbox.y1 - bbox.y0) * 0.18);
+  const mouthY = aB.mouth ? aB.mouth[1] : (eyeY + 70);
+  const blinkW = pat.blink ? pat.blink.w : 140;
+  const headH = (mouthY - eyeY) * 3.1;
+  const top = Math.max(bbox.y0, eyeY - headH * 0.74);
+  const neckY = top + headH * 1.06;
+  const hipY = neckY + (bbox.y1 - top) * 0.44;
+  const geom = { W, H, bbox, faceCx, eyeY, mouthY, blinkW, neckY, hipY, bboxBottom: bbox.y1 };
+  geomCache.set(pack, geom);
+  return geom;
 }
-function distSeg2(px, py, a, b) {
-  const vx = b[0] - a[0], vy = b[1] - a[1], L2 = vx * vx + vy * vy || 1;
-  let t = ((px - a[0]) * vx + (py - a[1]) * vy) / L2; t = t < 0 ? 0 : t > 1 ? 1 : t;
-  const dx = px - (a[0] + t * vx), dy = py - (a[1] + t * vy);
-  return dx * dx + dy * dy;
-}
-const tick = () => new Promise(r => setTimeout(r, 0));
 
-/* Cut the puppet out of the pack's own base art. Region-limited pixel passes
-   keep this fast; it runs chunked so the page never freezes. */
-async function buildRigAsync(pack) {
-  if (pack.rig || pack.rigPromise || pack.rigFailed) return pack.rig;
-  pack.rigPromise = (async () => {
-    const img = pack.img.base;
-    if (!img) { pack.rigFailed = true; return null; }
-    try {
-      const W = img.naturalWidth, H = img.naturalHeight;
-      const base = document.createElement('canvas'); base.width = W; base.height = H;
-      const bctx = base.getContext('2d', { willReadFrequently: true });
-      bctx.drawImage(img, 0, 0);
-      const src = bctx.getImageData(0, 0, W, H), data = src.data;
-      // tight bbox of the drawing
-      let bx0 = W, by0 = H, bx1 = -1, by1 = -1;
-      for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) {
-        if (data[(y * W + x) * 4 + 3] > 30) { if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; }
-      }
-      if (bx1 < 0) { pack.rigFailed = true; return null; }
-      const bbox = { x: bx0, y: by0, w: bx1 - bx0, h: by1 - by0 };
-      const J = estimateJoints(pack.manifest, bbox, W, H);
-      if (!J) { pack.rigFailed = true; return null; }
-      /* Find the REAL arm line: scan skin-tone pixels in the side bands from
-         the shoulder down (Forge's estimates can sit ~90px off the drawn arm).
-         Works for bare arms; for sleeved characters the sleeve's own light
-         fabric traces the same line. Falls back to the estimates. */
-      // skin across the packs spans fair (252,232,217) to deep (167,101,60);
-      // saturated garment colours (saree gold r-b≈230+) must NOT pass
-      const isSkin = i => data[i + 3] > 60 && data[i] > 120 &&
-        (data[i] - data[i + 2]) >= 5 && (data[i] - data[i + 2]) <= 120 &&
-        (data[i] - data[i + 1]) >= -5 && (data[i] - data[i + 1]) <= 75 &&
-        data[i + 1] > data[i + 2] + 5;
-      const detectArm = side => {
-        let xa = Math.round(J.faceCx + side * J.faceW * 0.40), xb = Math.round(J.faceCx + side * J.faceW * 1.75);
-        const lo = Math.max(0, Math.min(xa, xb)), hi = Math.min(W - 1, Math.max(xa, xb));
-        // a hanging wrist never passes ~84% of the shoulder-to-floor span —
-        // cap the scan there so the path can't wander into the legs
-        const yCap = Math.min(J.shoR[1] + J.headH * 1.9, J.shoR[1] + (bbox.y + bbox.h - J.shoR[1]) * 0.84);
-        const cand = [];
-        for (let y = Math.round(J.shoR[1]) + 6; y < yCap; y += 2) {
-          let sum = 0, cnt = 0;
-          for (let x = lo; x <= hi; x++) if (isSkin((y * W + x) * 4)) { sum += x; cnt++; }
-          if (cnt >= 4) cand.push([y, sum / cnt]);
-        }
-        // skin specks above the arm start sparse — first take the longest
-        // unbroken run of candidates, then walk it with the line-fit rule
-        let bestRun = [], curRun = [];
-        for (const r of cand) {
-          if (curRun.length && r[0] - curRun[curRun.length - 1][0] > 14) {
-            if (curRun.length > bestRun.length) bestRun = curRun;
-            curRun = [];
-          }
-          curRun.push(r);
-        }
-        if (curRun.length > bestRun.length) bestRun = curRun;
-        // start from the best run, then keep extending over later candidates
-        // while they hug the arm's fitted line; stop at a big gap, a jump, or
-        // when the centroid slides off the line (legs, feet, props)
-        const rows = [];
-        for (let ci = cand.indexOf(bestRun[0]); ci < cand.length; ci++) {
-          const r = cand[ci];
-          if (rows.length) {
-            const prev = rows[rows.length - 1];
-            if (r[0] - prev[0] > 60) break;
-            if (Math.abs(r[1] - prev[1]) > 46) break;
-            if (rows.length >= 10) {
-              const tail = rows.slice(-12);
-              const n = tail.length, sy = tail.reduce((s, q) => s + q[0], 0), sx = tail.reduce((s, q) => s + q[1], 0);
-              const syy = tail.reduce((s, q) => s + q[0] * q[0], 0), sxy = tail.reduce((s, q) => s + q[0] * q[1], 0);
-              const den = n * syy - sy * sy || 1, b = (n * sxy - sy * sx) / den, a = (sx - b * sy) / n;
-              if (Math.abs(r[1] - (a + b * r[0])) > 34) break;
-            }
-          }
-          rows.push(r);
-        }
-        if (rows.length < 25) return null;
-        const span = rows[rows.length - 1][0] - rows[0][0];
-        if (span < J.headH * 0.7) return null;
-        const sm = rows.map((r, i) => {
-          let s = 0, c = 0;
-          for (let d = -2; d <= 2; d++) { const q = rows[i + d]; if (q) { s += q[1]; c++; } }
-          return [r[0], s / c];
-        });
-        const at = f => sm.reduce((best, r) => Math.abs(r[0] - (sm[0][0] + span * f)) < Math.abs(best[0] - (sm[0][0] + span * f)) ? r : best, sm[0]);
-        const sho = [sm[0][1], sm[0][0]], elb = at(0.52), wri = [sm[sm.length - 1][1], sm[sm.length - 1][0]];
-        return { sho, elb: [elb[1], elb[0]], wri };
-      };
-      const armL = detectArm(1), armR = detectArm(-1); // image-right side = +x
-      if (armL) { J.shoL = armL.sho; J.elbL = armL.elb; J.wriL = armL.wri; }
-      if (armR) { J.shoR = armR.sho; J.elbR = armR.elb; J.wriR = armR.wri; }
-      const R = Math.max(16, J.faceW * 0.157), F = Math.max(5, R * 0.3), R2 = (R + 12) * (R + 12);
-      const out = new ImageData(W, H); out.data.set(data);
-      const od = out.data;
-      // fill arm holes with TORSO fabric: smear toward the body's centre line
-      const arms = [
-        { segs: [[J.shoR, J.elbR], [J.elbR, J.wriR]], shift: Math.sign(J.faceCx - J.shoR[0]) * R * 1.35 },
-        { segs: [[J.shoL, J.elbL], [J.elbL, J.wriL]], shift: Math.sign(J.faceCx - J.shoL[0]) * R * 1.35 }
-      ];
-      // pass 1: erase the arms (smear neighbouring pixels over them)
-      for (const a of arms) {
-        const xs = a.segs.flatMap(s => [s[0][0], s[1][0]]), ys = a.segs.flatMap(s => [s[0][1], s[1][1]]);
-        const x0 = Math.max(0, Math.floor(Math.min(...xs) - R - 16)), x1 = Math.min(W - 1, Math.ceil(Math.max(...xs) + R + 16));
-        const y0 = Math.max(0, Math.floor(Math.min(...ys) - R - 16)), y1 = Math.min(H - 1, Math.ceil(Math.max(...ys) + R + 16));
-        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-          const d2 = Math.min(distSeg2(x, y, a.segs[0][0], a.segs[0][1]), distSeg2(x, y, a.segs[1][0], a.segs[1][1]));
-          if (d2 > R2) continue;
-          const i = (y * W + x) * 4;
-          const sxp = Math.max(0, Math.min(W - 1, Math.round(x + a.shift)));
-          let j = (y * W + sxp) * 4;
-          if (data[j + 3] < 40) { const syp = Math.max(0, y - Math.round(J.headH * 0.68)); j = (syp * W + sxp) * 4; }
-          od[i] = data[j]; od[i + 1] = data[j + 1]; od[i + 2] = data[j + 2]; od[i + 3] = data[j + 3];
-        }
-        await tick();
-      }
-      // pass 2: erase the face ellipse completely (no ghost features under the head)
-      {
-        const [ecx, ecy, erx, ery] = J.ellipse;
-        const snapE = new Uint8ClampedArray(od);
-        const x0 = Math.max(0, Math.floor(ecx - erx * 1.15)), x1 = Math.min(W - 1, Math.ceil(ecx + erx * 1.15));
-        const y0 = Math.max(0, Math.floor(ecy - ery * 1.15)), y1 = Math.min(H - 1, Math.ceil(ecy + ery * 1.15));
-        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-          if (y > J.chin + J.headH * 0.08) continue; // throat/neck keep their real art
-          const dE = Math.hypot((x - ecx) / erx, (y - ecy) / ery);
-          if (dE >= 1.10) continue;
-          const i = (y * W + x) * 4;
-          if (snapE[i + 3] < 30) continue;
-          const f = Math.max(0, Math.min(1, (1.10 - dE) / 0.18)), dir = x < ecx ? -1 : 1;
-          let sxp = Math.max(0, Math.min(W - 1, Math.round(x + dir * erx * 1.3))), j = (y * W + sxp) * 4;
-          if (snapE[j + 3] < 30) { sxp = Math.max(0, Math.min(W - 1, Math.round(x - dir * erx * 1.3))); j = (y * W + sxp) * 4; }
-          const has = snapE[j + 3] >= 30;
-          od[i] = Math.round((has ? snapE[j] : 58) * f + snapE[i] * (1 - f));
-          od[i + 1] = Math.round((has ? snapE[j + 1] : 44) * f + snapE[i + 1] * (1 - f));
-          od[i + 2] = Math.round((has ? snapE[j + 2] : 40) * f + snapE[i + 2] * (1 - f));
-        }
-        await tick();
-      }
-      // pass 3: erase remaining skin tones in the head band (jaw/neck remnants)
-      {
-        const NL = J.neck[1], FH = Math.max(8, J.headH * 0.06);
-        const snap = new Uint8ClampedArray(od);
-        const x0 = Math.max(0, Math.floor(J.headBox[0])), x1 = Math.min(W - 1, Math.ceil(J.headBox[2]));
-        const y1 = Math.min(H - 1, Math.ceil(Math.min(NL + FH, J.chin + J.headH * 0.08)));
-        for (let y = 0; y <= y1; y++) {
-          const f = Math.max(0, Math.min(1, (NL + FH - y) / (2 * FH)));
-          if (f <= 0.02) continue;
-          for (let x = x0; x <= x1; x++) {
-            const i = (y * W + x) * 4;
-            if (snap[i + 3] < 30) continue;
-            if (!(snap[i] > 120 && snap[i] > snap[i + 2] + 18)) continue;
-            const dir = x < J.faceCx ? -1 : 1;
-            let sxp = Math.max(0, Math.min(W - 1, Math.round(x + dir * J.faceW * 0.32))), j = (y * W + sxp) * 4;
-            if (snap[j + 3] < 30) { sxp = Math.max(0, Math.min(W - 1, Math.round(x - dir * J.faceW * 0.32))); j = (y * W + sxp) * 4; }
-            const has = snap[j + 3] >= 30;
-            od[i] = Math.round((has ? snap[j] : 58) * f + snap[i] * (1 - f));
-            od[i + 1] = Math.round((has ? snap[j + 1] : 44) * f + snap[i + 1] * (1 - f));
-            od[i + 2] = Math.round((has ? snap[j + 2] : 40) * f + snap[i + 2] * (1 - f));
-            od[i + 3] = Math.max(snap[i + 3], Math.round((has ? snap[j + 3] : 255) * f));
-          }
-        }
-        await tick();
-      }
-      const erased = document.createElement('canvas'); erased.width = W; erased.height = H;
-      erased.getContext('2d').putImageData(out, 0, 0);
-      // head piece: head + flowing hair, feathered only at its bottom edge so
-      // the junction hides where hair meets the dress
-      const NL = J.neck[1], FH = Math.max(8, J.headH * 0.06), hb = J.headBox;
-      const hw = Math.round(hb[2] - hb[0]), hh = Math.round(hb[3] - hb[1]);
-      const headC = document.createElement('canvas'); headC.width = hw; headC.height = hh;
-      const hctx = headC.getContext('2d', { willReadFrequently: true });
-      hctx.drawImage(img, -hb[0], -hb[1]);
-      const hid = hctx.getImageData(0, 0, hw, hh), hd = hid.data;
-      for (let y = 0; y < hh; y++) {
-        const gy = y + hb[1];
-        if (gy < hb[3] - FH * 2) continue;
-        const f = Math.max(0, Math.min(1, (hb[3] - gy) / (FH * 2)));
-        for (let x = 0; x < hw; x++) { const i = (y * hw + x) * 4 + 3; hd[i] = Math.round(hd[i] * f); }
-      }
-      hctx.putImageData(hid, 0, 0);
-      const head = { img: headC, box: hb, pivot: J.headPivot };
-      await tick();
-      // arm strips: feathered masks around each bone
-      const strips = {};
-      const segDefs = [['Rup', J.shoR, J.elbR], ['Rlo', J.elbR, J.wriR], ['Lup', J.shoL, J.elbL], ['Llo', J.elbL, J.wriL]];
-      for (const [name, a, b] of segDefs) {
-        const box = [
-          Math.max(0, Math.min(a[0], b[0]) - R - 14), Math.max(0, Math.min(a[1], b[1]) - R - 14),
-          Math.min(W, Math.max(a[0], b[0]) + R + 14), Math.min(H, Math.max(a[1], b[1]) + R + 14)
-        ];
-        const cw = Math.round(box[2] - box[0]), ch = Math.round(box[3] - box[1]);
-        const c = document.createElement('canvas'); c.width = cw; c.height = ch;
-        const cctx = c.getContext('2d', { willReadFrequently: true });
-        cctx.drawImage(img, -box[0], -box[1]);
-        const idd = cctx.getImageData(0, 0, cw, ch), dd = idd.data;
-        const isUpper = name === 'Rup' || name === 'Lup';
-        const vx = b[0] - a[0], vy = b[1] - a[1], L2 = vx * vx + vy * vy || 1;
-        const crossC = (J.faceCx - a[0]) * vy - (((a[1] + b[1]) / 2) - a[1]) * vx;
-        for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
-          const gx = x + box[0], gy = y + box[1];
-          let t = ((gx - a[0]) * vx + (gy - a[1]) * vy) / L2; t = t < 0 ? 0 : t > 1 ? 1 : t;
-          // taper: narrow at the shoulder (keeps dress fabric out of the strip),
-          // full width at the hand; and narrower on the body-centre side, where
-          // the strip would otherwise bite into the dress
-          let Rt = R * (isUpper ? (0.60 + 0.40 * t) : (0.62 + 0.36 * t)) + F;
-          const cross = (gx - a[0]) * vy - (gy - a[1]) * vx;
-          if (crossC !== 0 && Math.sign(cross) === Math.sign(crossC)) Rt *= 0.7;
-          const d = Math.sqrt(distSeg2(gx, gy, a, b));
-          const f = Math.max(0, Math.min(1, (Rt - d) / (2 * F)));
-          if (f < 0.999) { const i = (y * cw + x) * 4 + 3; dd[i] = Math.round(dd[i] * f); }
-        }
-        cctx.putImageData(idd, 0, 0);
-        strips[name] = { img: c, box, from: a, to: b };
-        await tick();
-      }
-      pack.rig = { erased, strips, head, J, W, H, bbox };
-      return pack.rig;
-    } catch (e) { pack.rigFailed = true; return null; }
-  })();
-  return pack.rigPromise;
+/* One Euro filter — the avatar industry's standard landmark conditioner:
+   heavy smoothing when still (kills jitter), almost no lag when moving. */
+class OneEuro {
+  constructor(minCutoff = 1.0, beta = 0.02, dCutoff = 1.0) { this.mc = minCutoff; this.beta = beta; this.dc = dCutoff; this.x = null; this.dx = 0; this.t = 0; }
+  snap(x) { this.x = x; this.dx = 0; }
+  filter(x, t) {
+    if (this.x === null) { this.x = x; this.t = t; return x; }
+    const dt = Math.max(1 / 240, Math.min(0.1, ((t - this.t) / 1000) || (1 / 60))); this.t = t;
+    const aD = 1 / (1 + 1 / (2 * Math.PI * this.dc * dt));
+    const dxRaw = (x - this.x) / dt;
+    this.dx += aD * (dxRaw - this.dx);
+    const cutoff = this.mc + this.beta * Math.abs(this.dx);
+    const a = 1 / (1 + 1 / (2 * Math.PI * cutoff * dt));
+    this.x += a * (x - this.x);
+    return this.x;
+  }
+}
+function makePlacementFilters() {
+  return { cx: new OneEuro(1.4, 0.04), feetY: new OneEuro(1.2, 0.03), h: new OneEuro(0.9, 0.015), roll: new OneEuro(1.8, 0.03) };
 }
 
 /* ---------- state ---------- */
@@ -351,6 +150,9 @@ const state = {
   recording: false, chunks: [], recorder: null, stream: null,
   recUrl: null, recStart: 0, quality: 'high', reel: false, bg: null,
   hpS: { yaw: 0, pitch: 0, roll: 0 }, msgAt: 0, autoBalanced: false, lowFpsSince: 0,
+  poseName: 'base', candName: null, candCount: 0, poseSince: 0,
+  wristHist: { a: [], b: [] }, fig: null, figInit: false, talkSm: 0, nextBlink: 0,
+  leadFeetY: 0, leadH: 0,
   actors: { left: { p: 0, x: 0, talk: 0, talkT: 0, last: 0, tx: 0 }, right: { p: 0, x: 0, talk: 0, talkT: 0, last: 0, tx: 0 } }
 };
 const raw = { pose: null, face: null, hands: [] };
@@ -473,18 +275,7 @@ function updateMap() {
 }
 function toPx(p) { return { x: MAP.ox + (1 - p.x) * MAP.sw, y: MAP.oy + p.y * MAP.sh }; }
 function mid(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
-function faceState() {
-  const c = (state.face && state.face.cats) || {};
-  const blink = ((c.eyeBlinkLeft || 0) + (c.eyeBlinkRight || 0)) / 2 > 0.5;
-  const smile = ((c.mouthSmileLeft || 0) + (c.mouthSmileRight || 0)) / 2, jaw = c.jawOpen || 0;
-  let mouth = null;
-  if (jaw > 0.22) mouth = 'A';
-  else if ((c.mouthFunnel || 0) > 0.3) mouth = 'O';
-  else if (smile > 0.34) mouth = 'E';
-  const wide = smile > 0.45 && jaw > 0.1; // laughing: the big grin wins
-  if (wide) mouth = 'E';
-  return { blink, mouth, wide };
-}
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function headPoseRaw() {
   const fl = state.face && state.face.landmarks;
   if (!fl || !fl[1] || !fl[33] || !fl[263]) return null;
@@ -505,19 +296,6 @@ function drawTile(img, cx, cy, w, rot) {
   ctx.save(); ctx.translate(cx, cy); if (rot) ctx.rotate(rot);
   ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore();
 }
-function drawFaceTiles(pack, place) {
-  const fs = faceState(), F = pack.face || {};
-  if (fs.blink && pack.tiles.blink && F.blink) {
-    const p = place(F.blink.c[0], F.blink.c[1]);
-    drawTile(pack.tiles.blink, p.x, p.y, F.blink.w * place.scale, place.rot);
-  }
-  if (fs.mouth && pack.tiles[fs.mouth] && F[fs.mouth]) {
-    const p = place(F[fs.mouth].c[0], F[fs.mouth].c[1]);
-    let w = F[fs.mouth].w * place.scale;
-    if (fs.wide && fs.mouth === 'E') w *= 1.2;
-    drawTile(pack.tiles[fs.mouth], p.x, p.y, w, place.rot);
-  }
-}
 function shadow(x, y, w) {
   ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.30)';
   ctx.beginPath(); ctx.ellipse(x, y, w / 2, w * 0.09, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
@@ -531,130 +309,197 @@ function drawStrip(st, liveFrom, liveTo) {
   ctx.drawImage(st.img, -(rf[0] - st.box[0]), -(rf[1] - st.box[1])); ctx.restore();
 }
 
-/* ---------- the lead: YOU, converted ---------- */
+/* ---------- the lead: the Stage Puppet (v2.0) ----------
+   The research verdict, implemented: the character is NEVER cut up. It is the
+   pack's own authored drawings — base + wave/point/open/thumbs, complete
+   illustrations on the same canvas and floor line. Your pose landmarks drive a
+   gesture classifier (with hysteresis, so it cannot flicker); your face
+   blendshapes drive the A/O/E/blink tiles at the CURRENT POSE's hand-measured
+   anchors — the exact compositing the delivered family pilot proved. The whole
+   figure follows your torso (position, scale, lean), and a secondary-motion
+   layer (breath, idle bob, talk bounce, blink timer) keeps it alive. Bad or
+   missing tracking is REFUSED (hold the last good state), never drawn. */
+/* Face state from the app's canonical blendshape map (inferAll converts
+   MediaPipe categories into `cats` once, at capture). */
+function faceState() {
+  const out = { mouth: null, wide: false, blink: false, laugh: false };
+  const c = (state.face && state.face.cats) || null;
+  if (c) {
+    const jaw = c.jawOpen || 0, smile = ((c.mouthSmileLeft || 0) + (c.mouthSmileRight || 0)) / 2;
+    const stretch = c.mouthStretchLeft || 0, round = Math.max(c.mouthFunnel || 0, c.mouthPucker || 0);
+    out.blink = (c.eyeBlinkLeft || 0) > 0.55 && (c.eyeBlinkRight || 0) > 0.55;
+    out.laugh = jaw > 0.30 && smile > 0.45;
+    if (jaw > 0.16) out.mouth = round > 0.38 ? 'O' : 'A';
+    else if (smile > 0.38 || stretch > 0.30) { out.mouth = 'E'; out.wide = true; }
+  }
+  if (!out.mouth && state.face && state.face.landmarks) { // landmark fallback (mouth-open ratio)
+    const lm = state.face.landmarks, up = lm[13], dn = lm[14], lf = lm[78], rt = lm[308];
+    if (up && dn && lf && rt) {
+      const wM = Math.hypot(rt.x - lf.x, rt.y - lf.y) || 1e-6;
+      const ratio = Math.hypot(dn.x - up.x, dn.y - up.y) / wM;
+      if (ratio > 0.30) out.mouth = 'A'; else if (ratio > 0.16) out.mouth = 'O';
+    }
+  }
+  return out;
+}
+/* Head pose from landmarks (the pipeline stores landmarks + cats, no matrix):
+   roll = the eye line's on-screen angle, yaw/pitch = nose offset in eye spans. */
+let hpRaw = { yaw: 0, pitch: 0, roll: 0 };
 function updateHeadPose() {
-  const hpR = headPoseRaw(), hp = state.hpS;
-  if (hpR) { hp.yaw += (hpR.yaw - hp.yaw) * 0.5; hp.pitch += (hpR.pitch - hp.pitch) * 0.5; hp.roll += (hpR.roll - hp.roll) * 0.5; }
-  else { hp.yaw *= 0.92; hp.pitch *= 0.92; hp.roll *= 0.92; }
-}
-function drawHeadPiece(pack, rig, imgPt, k, tilt) {
-  const pv = rig.head.pivot, pivLive = imgPt(pv[0], pv[1]);
-  ctx.save(); ctx.translate(pivLive.x, pivLive.y); ctx.rotate(tilt + state.hpS.roll * 0.85);
-  ctx.scale(k * (1 - 0.35 * Math.abs(state.hpS.yaw)), k);
-  ctx.drawImage(rig.head.img, -(pv[0] - rig.head.box[0]), -(pv[1] - rig.head.box[1]));
-  const fs = faceState(), F = pack.face || {};
-  const tileLocal = (imgT, c, w) => {
-    if (!imgT || !c) return;
-    const h = w * imgT.naturalHeight / imgT.naturalWidth;
-    ctx.drawImage(imgT, c[0] - pv[0] - w / 2, c[1] - pv[1] - h / 2, w, h);
+  const fl = state.face && state.face.landmarks;
+  if (!fl || !fl[33] || !fl[263] || !fl[1]) return;
+  const le = toPx(fl[33]), re = toPx(fl[263]), nose = toPx(fl[1]);
+  const midE = mid(le, re);
+  const span = Math.max(8, Math.hypot(re.x - le.x, re.y - le.y));
+  hpRaw = {
+    roll: Math.atan2(re.y - le.y, re.x - le.x),
+    yaw: clamp((nose.x - midE.x) / span, -1, 1),
+    pitch: clamp((nose.y - midE.y) / span - 0.32, -1, 1)
   };
-  if (fs.blink && F.blink) tileLocal(pack.tiles.blink, F.blink.c, F.blink.w);
-  if (fs.mouth && F[fs.mouth]) tileLocal(pack.tiles[fs.mouth], F[fs.mouth].c, F[fs.mouth].w * (fs.wide && fs.mouth === 'E' ? 1.2 : 1));
-  ctx.restore();
+  const a = 0.35;
+  state.hpS.yaw += (hpRaw.yaw - state.hpS.yaw) * a;
+  state.hpS.pitch += (hpRaw.pitch - state.hpS.pitch) * a;
+  state.hpS.roll += (hpRaw.roll - state.hpS.roll) * a;
 }
-/* Selfie distance: no body in frame, but a face — the performance still
-   lives. The character is anchored to your face: it stands where you are,
-   its head turns with yours, its mouth and blinks are yours, arms at rest. */
-function drawFaceLed(pack, W, H) {
-  const fl = state.face.landmarks;
-  const e1 = toPx(fl[33]), e2 = toPx(fl[263]);
-  const eyeC = mid(e1, e2), eyeSpan = Math.max(12, Math.hypot(e2.x - e1.x, e2.y - e1.y));
-  const rig = (RIG_PACKS.has(cast.lead) && pack.rig) ? pack.rig : null;
-  if (rig) {
-    const J = rig.J, blinkW = (pack.manifest.talk.patches.blink || {}).w || J.faceW / 1.55;
-    let k = eyeSpan / blinkW;
-    k = Math.max(0.10, Math.min(k, (H * 1.25) / rig.H));
-    const tilt = state.hpS.roll;
-    const nox = (J.neck[0] - J.faceCx) * k, noy = (J.neck[1] - J.eyeY) * k;
-    const c = Math.cos(tilt), s = Math.sin(tilt);
-    const O = { x: eyeC.x + nox * c - noy * s, y: eyeC.y + nox * s + noy * c }, org = J.neck;
-    const imgPt = (fx, fy) => {
-      const dx = (fx - org[0]) * k, dy = (fy - org[1]) * k;
-      return { x: O.x + dx * c - dy * s, y: O.y + dx * s + dy * c };
-    };
-    const feet = imgPt(J.hip[0], rig.bbox.y + rig.bbox.h);
-    state.leadFeetY = Math.min(H - 4, feet.y); state.leadH = rig.bbox.h * k;
-    shadow(feet.x, Math.min(H - 6, feet.y), 300 * k);
-    drawStrip(rig.strips.Rup, imgPt(J.shoR[0], J.shoR[1]), imgPt(J.elbR[0], J.elbR[1]));
-    drawStrip(rig.strips.Lup, imgPt(J.shoL[0], J.shoL[1]), imgPt(J.elbL[0], J.elbL[1]));
-    ctx.save(); ctx.translate(O.x, O.y); ctx.rotate(tilt); ctx.scale(k, k);
-    ctx.drawImage(rig.erased, -org[0], -org[1]); ctx.restore();
-    drawStrip(rig.strips.Rlo, imgPt(J.elbR[0], J.elbR[1]), imgPt(J.wriR[0], J.wriR[1]));
-    drawStrip(rig.strips.Llo, imgPt(J.elbL[0], J.elbL[1]), imgPt(J.wriL[0], J.wriL[1]));
-    drawHeadPiece(pack, rig, imgPt, k, tilt);
-  } else {
-    if (RIG_PACKS.has(cast.lead) && !pack.rigFailed) buildRigAsync(pack);
-    const img = pack.img.base, blinkW = ((pack.manifest.talk || {}).patches || {}).blink ? pack.manifest.talk.patches.blink.w : 130;
-    const charH = Math.min(H * 1.5, eyeSpan / blinkW * img.naturalHeight), charW = charH * img.naturalWidth / img.naturalHeight;
-    const top = eyeC.y - charH * 0.22;
-    state.leadFeetY = Math.min(H - 4, top + charH); state.leadH = charH;
-    shadow(eyeC.x, Math.min(H - 6, top + charH), charW * 0.8);
-    ctx.drawImage(img, eyeC.x - charW / 2, top, charW, charH);
-    const place = (fx, fy) => ({ x: eyeC.x - charW / 2 + fx / img.naturalWidth * charW, y: top + fy / img.naturalHeight * charH });
-    place.scale = charW / img.naturalWidth; place.rot = 0;
-    drawFaceTiles(pack, place);
+
+function elbowAngle(a, b, c) {
+  const v1x = a.x - b.x, v1y = a.y - b.y, v2x = c.x - b.x, v2y = c.y - b.y;
+  const d = (Math.hypot(v1x, v1y) * Math.hypot(v2x, v2y)) || 1;
+  return Math.acos(Math.max(-1, Math.min(1, (v1x * v2x + v1y * v2y) / d))) * 180 / Math.PI;
+}
+/* Gesture classifier: reads the performer's pose, returns the pack pose that
+   matches, or null ("hold"). Only fully-visible joints count — anything else
+   is refused, Kalidokit-style, instead of being followed into garbage. */
+function classifyGesture() {
+  const lm = state.pose, H = stage.height;
+  if (!lm) return null;
+  for (const i of [11, 12, 13, 14, 15, 16, 23, 24]) if ((lm[i].visibility ?? 1) < 0.45) return null;
+  const p = i => toPx(lm[i]);
+  const hipC = mid(p(23), p(24)), nose = p(0);
+  const shoW = Math.max(30, Math.hypot(p(12).x - p(11).x, p(12).y - p(11).y));
+  const mk = (si, ei, wi, hist) => {
+    const sho = p(si), elb = p(ei), wri = p(wi);
+    hist.push(wri.x); if (hist.length > 14) hist.shift();
+    let rev = 0;
+    for (let i = 2; i < hist.length; i++) { const d1 = hist[i - 1] - hist[i - 2], d2 = hist[i] - hist[i - 1]; if (d1 * d2 < 0 && Math.abs(d2) > 2) rev++; }
+    return { sho, elb, wri, raised: wri.y < sho.y - H * 0.035, straight: elbowAngle(sho, elb, wri) > 152, osc: rev >= 2 };
+  };
+  const A = mk(11, 13, 15, state.wristHist.a), B = mk(12, 14, 16, state.wristHist.b);
+  if ((A.raised && A.osc) || (B.raised && B.osc)) return 'wave';
+  if (A.raised && B.raised) return 'open';
+  if ((A.raised && A.wri.y < nose.y + H * 0.02) || (B.raised && B.wri.y < nose.y + H * 0.02)) return 'wave';
+  const pointing = s => s.straight && Math.abs(s.wri.y - s.sho.y) < H * 0.10 && Math.abs(s.wri.x - s.sho.x) > shoW * 0.55;
+  const reachA = Math.abs(A.wri.x - A.sho.x), reachB = Math.abs(B.wri.x - B.sho.x);
+  if ((pointing(A) && !B.raised && reachA > reachB * 1.6) || (pointing(B) && !A.raised && reachB > reachA * 1.6)) return 'point';
+  for (const h of state.hands) {
+    if (!h[0] || !h[4] || !h[5] || !h[8]) continue;
+    const w = toPx(h[0]), tt = toPx(h[4]), im = toPx(h[5]), it = toPx(h[8]);
+    if (tt.y < w.y - H * 0.03 && it.y > im.y - H * 0.01 && w.y < hipC.y + H * 0.12) return 'thumbs';
+  }
+  return null;
+}
+function updatePoseChoice(now) {
+  const cand = classifyGesture();
+  if (cand === state.candName) state.candCount++; else { state.candName = cand; state.candCount = 1; }
+  const need = cand ? 3 : 5; // entering a pose is fast; leaving it is steadier
+  const want = cand || 'base';
+  if (want !== state.poseName && state.candCount >= need && now - state.poseSince > 550) {
+    state.poseName = want; state.poseSince = now;
   }
 }
-function drawLead() {
+
+/* Draws the whole figure for the current pose, with face tiles composited at
+   that pose's own hand-measured anchors, inside the figure's transform — so
+   the face can never split from the head again. */
+function drawFigure(pack, now, cx, feetY, h, roll) {
+  const G = packGeom(pack);
+  const img = pack.poses[state.poseName] || pack.img.base;
+  if (!img) return;
+  const s = h / G.H;
+  const fs = faceState();
+  state.talkSm += ((fs.mouth ? 1 : 0) - state.talkSm) * 0.3;
+  const bob = Math.sin(now / 340) * 1.1 + state.talkSm * Math.sin(now / 85) * 1.7;
+  const breath = 1 + 0.007 * Math.sin(now / 1500);
+  shadow(cx, Math.min(stage.height - 5, feetY + bob * s * 8), G.W * s * 0.60);
+  ctx.save();
+  ctx.translate(cx, feetY + bob * s * 8); ctx.rotate(roll); ctx.scale(s, s * breath);
+  ctx.drawImage(img, -G.W / 2, -G.bboxBottom, G.W, G.H);
+  const anch = pack.anchors[state.poseName] || pack.anchors.base || null;
+  const patches = (pack.manifest.talk || {}).patches || {};
+  if (anch) {
+    const lx = ax => ax - G.W / 2, ly = ay => ay - G.bboxBottom;
+    const autoBlink = !state.face && now > state.nextBlink && now < state.nextBlink + 130;
+    if ((fs.blink || autoBlink) && pack.tiles.blink && patches.blink && anch.eyes) {
+      const tw = patches.blink.w, th = tw * pack.tiles.blink.naturalHeight / pack.tiles.blink.naturalWidth;
+      ctx.drawImage(pack.tiles.blink, lx(anch.eyes[0]) - tw / 2, ly(anch.eyes[1]) - th / 2, tw, th);
+    }
+    const mouthKey = fs.mouth || (fs.laugh ? 'E' : null);
+    if (mouthKey && pack.tiles[mouthKey] && patches[mouthKey] && anch.mouth) {
+      const tw = patches[mouthKey].w * ((fs.wide || fs.laugh) ? 1.2 : 1);
+      const th = tw * pack.tiles[mouthKey].naturalHeight / pack.tiles[mouthKey].naturalWidth;
+      ctx.drawImage(pack.tiles[mouthKey], lx(anch.mouth[0]) - tw / 2, ly(anch.mouth[1]) - th / 2, tw, th);
+    }
+  }
+  ctx.restore();
+  if (!state.face && now > state.nextBlink + 130) state.nextBlink = now + 2400 + Math.random() * 1800;
+  state.leadFeetY = feetY; state.leadH = h;
+}
+
+function drawLead(now) {
   const pack = packs[cast.lead];
   if (!pack || !pack.img.base) return;
-  const W = stage.width, H = stage.height, lm = state.pose;
-  updateHeadPose();
-  if (!lm && state.face && state.face.landmarks) { drawFaceLed(pack, W, H); return; }
-  if (!lm) {
-    const img = pack.img.base, h = H * 0.94, w = h * img.naturalWidth / img.naturalHeight;
-    state.leadH = h; state.leadFeetY = H - 4;
-    shadow(W / 2, H - 6, w * 0.7);
-    ctx.drawImage(img, (W - w) / 2, H - h, w, h);
-    return;
+  const W = stage.width, H = stage.height, G = packGeom(pack);
+  if (!state.fig) state.fig = makePlacementFilters();
+  let tcx, tFeetY, th, troll, live = false;
+  const lm = state.pose;
+  const hipsVis = !!(lm && lm[23] && lm[24] && (lm[23].visibility ?? 1) > 0.5 && (lm[24].visibility ?? 1) > 0.5);
+  if (lm && hipsVis && lm[11] && lm[12]) {
+    // full/upper body: the figure stands where you stand, sized by your torso
+    updatePoseChoice(now);
+    const neckC = mid(toPx(lm[11]), toPx(lm[12])), hipC = mid(toPx(lm[23]), toPx(lm[24]));
+    const torsoLive = Math.max(26, Math.hypot(hipC.x - neckC.x, hipC.y - neckC.y));
+    th = Math.max(H * 0.25, Math.min(H * 1.12, (G.H * torsoLive) / Math.max(60, G.hipY - G.neckY)));
+    const s = th / G.H;
+    tcx = hipC.x; tFeetY = hipC.y + (G.bboxBottom - G.hipY) * s;
+    const tilt = Math.atan2(neckC.y - hipC.y, neckC.x - hipC.x) + Math.PI / 2;
+    troll = clamp(tilt * 0.55 + state.hpS.roll * 0.25, -0.32, 0.32);
+    live = true;
+  } else if (state.face && state.face.landmarks) {
+    // face only (the usual selfie framing): you still ARE the character —
+    // head-driven placement, gesture poses hold, face fully alive
+    const fl = state.face.landmarks, le = fl[33], re = fl[263];
+    if (le && re) {
+      const eyeSpan = Math.hypot(toPx(re).x - toPx(le).x, toPx(re).y - toPx(le).y);
+      const eyeC = mid(toPx(le), toPx(re));
+      th = Math.max(H * 0.3, Math.min(H * 1.6, (G.H * eyeSpan) / Math.max(20, G.blinkW)));
+      const s = th / G.H;
+      tcx = eyeC.x + (G.W / 2 - G.faceCx) * s;
+      tFeetY = eyeC.y + (G.bboxBottom - G.eyeY) * s;
+      troll = clamp(state.hpS.roll * 0.6, -0.35, 0.35);
+      live = true;
+    }
   }
-  const P = i => toPx(lm[i]);
-  const hip = mid(P(23), P(24)), neckC = mid(P(11), P(12));
-  const torsoVec = { x: neckC.x - hip.x, y: neckC.y - hip.y };
-  const torsoLen = Math.max(30, Math.hypot(torsoVec.x, torsoVec.y));
-  const tilt = Math.atan2(torsoVec.x, -torsoVec.y);
-  const rig = (RIG_PACKS.has(cast.lead) && pack.rig) ? pack.rig : null;
-  if (rig) {
-    const J = rig.J;
-    const liveShoulder = Math.max(24, Math.hypot(P(11).x - P(12).x, P(11).y - P(12).y));
-    let k = liveShoulder / J.shoulderDist;
-    k = Math.max(0.10, Math.min(k, (H * 1.35) / rig.H));
-    const relScale = k * J.shoulderDist / liveShoulder;
-    const O = neckC, org = J.neck;
-    const imgPt = (fx, fy) => {
-      const dx = (fx - org[0]) * k, dy = (fy - org[1]) * k;
-      const c = Math.cos(tilt), s = Math.sin(tilt);
-      return { x: O.x + dx * c - dy * s, y: O.y + dx * s + dy * c };
-    };
-    const rel = i => { const p = P(i); return { x: O.x + (p.x - O.x) * relScale, y: O.y + (p.y - O.y) * relScale }; };
-    const feet = imgPt(J.hip[0], rig.bbox.y + rig.bbox.h);
-    state.leadFeetY = Math.min(H - 4, feet.y);
-    state.leadH = rig.bbox.h * k;
-    shadow(feet.x, Math.min(H - 6, feet.y), 300 * k);
-    // upper arms go UNDER the torso (their tops tuck behind the dress),
-    // forearms and head ride on top
-    drawStrip(rig.strips.Rup, imgPt(J.shoR[0], J.shoR[1]), rel(14));
-    drawStrip(rig.strips.Lup, imgPt(J.shoL[0], J.shoL[1]), rel(13));
-    ctx.save(); ctx.translate(O.x, O.y); ctx.rotate(tilt); ctx.scale(k, k);
-    ctx.drawImage(rig.erased, -org[0], -org[1]); ctx.restore();
-    drawStrip(rig.strips.Rlo, rel(14), rel(16));
-    drawStrip(rig.strips.Llo, rel(13), rel(15));
-    // head: own piece, gaze-driven, face tiles drawn inside its transform
-    drawHeadPiece(pack, rig, imgPt, k, tilt);
-  } else {
-    if (RIG_PACKS.has(cast.lead) && !pack.rigFailed) buildRigAsync(pack); // still cutting the puppet: anchored meanwhile
-    const img = pack.img.base;
-    const ankY = Math.max(P(27).y, P(28).y), span = Math.max(80, ankY - P(0).y);
-    const charH = Math.min(H * 1.05, span * 1.5), charW = charH * img.naturalWidth / img.naturalHeight;
-    const cx = hip.x, feetY = Math.min(H - 4, ankY + charH * 0.06);
-    state.leadFeetY = feetY; state.leadH = charH;
-    ctx.save(); ctx.translate(cx, feetY); ctx.rotate(tilt * 0.7); ctx.translate(-cx, -feetY);
-    shadow(cx, feetY, charW * 0.8);
-    ctx.drawImage(img, cx - charW / 2, feetY - charH, charW, charH); ctx.restore();
-    const place = (fx, fy) => ({ x: cx - charW / 2 + fx / img.naturalWidth * charW, y: feetY - charH + fy / img.naturalHeight * charH });
-    place.scale = charW / img.naturalWidth; place.rot = 0;
-    drawFaceTiles(pack, place);
+  if (!live && lm && lm[11] && lm[12] && (lm[11].visibility ?? 1) > 0.5 && (lm[12].visibility ?? 1) > 0.5) {
+    // shoulders only: scale from shoulder width, stand on the neck line
+    const neckC = mid(toPx(lm[11]), toPx(lm[12]));
+    const shoLive = Math.max(20, Math.hypot(toPx(lm[12]).x - toPx(lm[11]).x, toPx(lm[12]).y - toPx(lm[11]).y));
+    th = Math.max(H * 0.25, Math.min(H * 1.3, (G.H * shoLive) / (G.blinkW * 1.86)));
+    const s = th / G.H;
+    tcx = neckC.x; tFeetY = neckC.y + (G.bboxBottom - G.neckY) * s;
+    troll = clamp(state.hpS.roll * 0.3, -0.3, 0.3);
+    live = true;
   }
+  if (!live) { // idle stage pose
+    tcx = W / 2; th = H * 0.92; tFeetY = H - 6; troll = 0;
+    if (state.poseName !== 'base') { state.poseName = 'base'; state.poseSince = now; }
+  }
+  if (!state.figInit) { // snap on the first frame / after a cast change
+    state.fig.cx.snap(tcx); state.fig.feetY.snap(tFeetY); state.fig.h.snap(th); state.fig.roll.snap(troll);
+    state.figInit = true;
+  }
+  const cx = state.fig.cx.filter(tcx, now), feetY = state.fig.feetY.filter(tFeetY, now);
+  const h = state.fig.h.filter(th, now), roll = state.fig.roll.filter(troll, now);
+  drawFigure(pack, now, cx, feetY, h, roll);
 }
 
 /* ---------- co-actors: your hands conduct them, full-size on the floor ---------- */
@@ -742,7 +587,7 @@ function loop(ts) {
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = '#6d4423'; ctx.fillRect(0, H * 0.94, W, H * 0.06);
   }
-  drawLead();
+  drawLead(ts || performance.now());
   if (state.mode !== 'idle' && chkCo.checked) drawCoActors(ts || 0);
   // honest guidance: camera is on but no body found — say what to do
   if (state.mode === 'camera' && poseL && !state.pose && performance.now() - lastPoseAt > 2500 && (ts || 0) - noPoseMsgAt > 7000) {
@@ -838,7 +683,7 @@ btnRetake.addEventListener('click', () => {
 });
 
 /* Debug/testing handle — lets the sandbox harness drive synthetic performers. */
-window.__rangmanch = { version: VERSION, state, raw, cast, packs, ensurePack, buildRigAsync, stage };
+window.__rangmanch = { version: VERSION, state, raw, cast, packs, ensurePack, classifyGesture, packGeom, stage };
 
 fillCastSelects();
 requestAnimationFrame(loop);

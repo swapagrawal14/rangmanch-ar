@@ -14,12 +14,21 @@
 
 **Every AI tool in this hackathon asks you to type. Rangmanch asks you to *act*.**
 
-Stand in front of your phone. You **become** the lead actor: the character is
-cut live from its own artwork and re-posed on your skeleton — shoulders,
-elbows, wrists, hips — every single frame. Your **hands** conduct two full-size
-co-actors standing on the stage floor beside you, and your **face** drives the
-lead's mouth and blinks. Hit record, perform the scene in your own voice,
-download the cartoon film.
+Stand in front of your phone. You **become** the lead actor: the character
+stands where you stand, leans when you lean — and performs with you. Raise a
+hand and it waves; point, and it points; throw both arms wide, and it throws
+its arms wide. Those are not tricks: every character ships as a set of complete
+authored drawings (base, wave, point, open, thumbs-up) drawn on one canvas, and
+a gesture classifier reads your skeleton and performs the matching drawing —
+while your **face** drives the lead's mouth, laugh and blinks on every pose,
+and your **hands** conduct two full-size co-actors on the stage floor beside
+you. Hit record, perform the scene in your own voice, download the cartoon film.
+
+*(Why drawings instead of a cut-up puppet? Because that is how every shipped
+avatar system works — Live2D, PNGTubers, Pose Animator all perform authored
+art and never carve a finished illustration apart at runtime. v2.0 is built on
+that research; the earlier skeletal cut-out rig was removed, honestly, because
+it could never look right.)*
 
 No drawing. No animation software. No face-cam. No prompt-typing. No server —
 and your video never leaves your device.
@@ -52,7 +61,7 @@ and camera-shy creator who can act but cannot animate.
 
 <p align="center">
   <img src="docs/assets/pose-strip.png" alt="Lead actor poses — base, wave, point, open, thumbs" width="820">
-  <br><em>The lead's own artwork (Rigpop Forge pose set). Since v0.4 the live performance is skeletal — these poses are the art the puppet is cut from, not frames it swaps between.</em>
+  <br><em>The lead's own artwork (Rigpop Forge pose set) — and, since v2.0, the performance itself: the character performs these authored drawings, with your face composited live onto each one.</em>
 </p>
 
 | You do this | The stage does this |
@@ -78,34 +87,36 @@ and camera-shy creator who can act but cannot animate.
 ```
 Camera + Mic ──► MediaPipe Tasks Vision (WASM, GPU→CPU fallback, lite models)
                    ├─ PoseLandmarker   33 pts        ─┐
-                   ├─ HandLandmarker   2 × 21 pts    ─┼─► Retargeting
-                   └─ FaceLandmarker   52 blendshapes─┘    ├─ body → live puppet rig (bone-by-bone)
+                   ├─ HandLandmarker   2 × 21 pts    ─┼─► Performance engine
+                   └─ FaceLandmarker   52 blendshapes─┘    ├─ body → gesture classifier (hysteresis,
+                                                            │    visibility refusal) → authored pose;
+                                                            │    torso → figure placement (One Euro)
                                                             ├─ hands → co-actor entrance/walk, pinch = talk
-                                                            └─ face  → A/O/E mouths + blink
+                                                            └─ face  → A/O/E mouths + blink + laugh,
+                                                                 at each pose's own measured anchors
 Characters ────► Rigpop Forge packs, consumed as-is
-                 (character.rigpop.json: base art + A/O/E/blink patch tiles)
-Auto-rig ──────► At cast time the browser builds the puppet from the pack's own
-                 artwork: the skeleton is estimated from the face geometry (the
-                 same math as Forge's WowKit exporter), then the real arm lines
-                 are found by scanning the drawing's skin tones. Arms and head
-                 are cut out as feathered pieces, the holes are filled with
-                 torso fabric, and the face is erased whole so nothing ghosts.
+                 (character.rigpop.json: base + wave/point/open/thumbs pose
+                 drawings + A/O/E/blink patch tiles + per-pose face anchors)
+Stagecraft ────► The figure is never cut or warped: it is the artist's drawing,
+                 kept alive with breath, idle bob, talk bounce and blink timers
+                 (the PNGTuber recipe), placed by torso/face tracking.
 Stage ─────────► <canvas>: your room as a soft blur (you are never drawn),
                  aspect-true landmark mapping, floor shadows, captions
 Film ──────────► canvas.captureStream(30) + mic track → MediaRecorder → download
 ```
 
 Performance is engineered, not hoped for: pose runs every frame while face and
-hands alternate frames (they read perfectly at half rate), the rig builds in
-~200 ms of chunked passes that never freeze the page, and if the frame rate
+hands alternate frames (they read perfectly at half rate), per-pack setup is a
+single ~20 ms geometry scan, and if the frame rate
 sags the stage sheds load automatically and tells you on the ticket.
 
 ## Testing
 
 `tests/` drives the real app in Chromium (Playwright): console-error watch,
 Demo Mode, synthetic-performer scenarios (rest, wave + talk, look + laugh,
-blink, portrait close-up, co-actors, 9:16 reel, a second rigged lead), a
-record/download round-trip, rig-piece dumps per pack, and a run with the real
+blink, gesture-classifier pose switches (wave/point/open/base), portrait
+close-up, co-actors, 9:16 reel, a second lead), a record/download round-trip,
+and a run with the real
 MediaPipe models against a fake camera. Every screenshot is eyeballed before
 a release is called done.
 
