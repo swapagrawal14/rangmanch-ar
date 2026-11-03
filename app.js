@@ -20,7 +20,7 @@ const statusModel = $('#status-model'), dotPose = $('#dot-pose'), dotHand = $('#
 const WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
 const MODEL = 'https://storage.googleapis.com/mediapipe-models';
 const PACKS_BASE = 'assets/packs/';
-const VERSION = '2.0.1';
+const VERSION = '2.0.2';
 
 /* ---------- cast ---------- */
 const CAST = [
@@ -201,16 +201,21 @@ async function infer() {
   if (!poseL || cam.readyState < 2 || cam.currentTime === lastVideoTime) return;
   lastVideoTime = cam.currentTime; frameNo++;
   const t = performance.now();
-  const high = state.quality === 'high';
+  const q = state.quality;
+  const poseEvery = q === 'high' ? 1 : q === 'balanced' ? 2 : 3;
+  const faceEvery = q === 'high' ? 1 : q === 'balanced' ? 2 : 3;
+  const handEvery = q === 'high' ? 2 : q === 'balanced' ? 4 : 6;
   try {
-    const pr = poseL.detectForVideo(cam, t);
-    raw.pose = pr.landmarks && pr.landmarks[0] ? pr.landmarks[0] : null;
-    if (raw.pose) { lastPoseAt = performance.now(); inferErrors = 0; }
-    if (high || frameNo % 2 === 0) {
+    if (frameNo % poseEvery === 0) {
+      const pr = poseL.detectForVideo(cam, t);
+      raw.pose = pr.landmarks && pr.landmarks[0] ? pr.landmarks[0] : null;
+      if (raw.pose) { lastPoseAt = performance.now(); inferErrors = 0; }
+    }
+    if (frameNo % handEvery === 0) {
       const hr = handL.detectForVideo(cam, t);
       raw.hands = hr.landmarks || [];
     }
-    if (high || frameNo % 2 === 1) {
+    if ((frameNo + 1) % faceEvery === 0) {
       const fr = faceL.detectForVideo(cam, t);
       if (fr.faceLandmarks && fr.faceLandmarks[0]) {
         const cats = {};
@@ -457,7 +462,11 @@ function drawLead(now) {
   let tcx, tFeetY, th, troll, live = false;
   const lm = state.pose;
   if (lm) updatePoseChoice(now); // gestures read the ARMS — they must run in every framing, selfie included
-  const hipsVis = !!(lm && lm[23] && lm[24] && (lm[23].visibility ?? 1) > 0.5 && (lm[24].visibility ?? 1) > 0.5);
+  // MediaPipe happily hallucinates hips BELOW the frame at selfie distance
+  // (her phone screenshot: BODY green, character shrunk by a phantom torso).
+  // The torso branch may only run when the hips are really in frame.
+  const inFrame = p => p && p.x > -0.05 && p.x < 1.05 && p.y > -0.05 && p.y < 1.02;
+  const hipsVis = !!(lm && inFrame(lm[23]) && inFrame(lm[24]) && (lm[23].visibility ?? 1) > 0.55 && (lm[24].visibility ?? 1) > 0.55);
   if (lm && hipsVis && lm[11] && lm[12]) {
     // full/upper body: the figure stands where you stand, sized by your torso
     const neckC = mid(toPx(lm[11]), toPx(lm[12])), hipC = mid(toPx(lm[23]), toPx(lm[24]));
@@ -571,22 +580,24 @@ function loop(ts) {
   const W = stage.width, H = stage.height;
   ctx.clearRect(0, 0, W, H);
   if (state.mode === 'camera' && cam.readyState >= 2) {
-    // your room survives only as colour ambience. YOU are gone: fully replaced.
-    // The camera is crushed to 48x27 colour blobs before it is upscaled — at
-    // that resolution there is no face, no body, no silhouette left to see.
-    if (!state.bg) { state.bg = document.createElement('canvas'); state.bg.width = 48; state.bg.height = 27; }
+    // NO camera pixels reach the stage at all — Swapnil's verdict, three
+    // times over: she must never see herself. The room contributes exactly
+    // one average colour, used as a soft glow behind the theatre backdrop.
+    if (!state.bg) { state.bg = document.createElement('canvas'); state.bg.width = 1; state.bg.height = 1; }
     const bgc = state.bg.getContext('2d');
-    const vw = cam.videoWidth, vh = cam.videoHeight, s = Math.max(48 / vw, 27 / vh);
-    bgc.save(); bgc.translate(48, 0); bgc.scale(-1, 1);
-    bgc.drawImage(cam, (48 - vw * s) / 2, (27 - vh * s) / 2, vw * s, vh * s); bgc.restore();
-    ctx.save(); ctx.imageSmoothingEnabled = true;
-    ctx.filter = 'blur(16px)';
-    ctx.drawImage(state.bg, -24, -24, W + 48, H + 48);
-    ctx.filter = 'none';
-    ctx.fillStyle = 'rgba(26,9,13,0.55)'; ctx.fillRect(0, 0, W, H);
+    bgc.drawImage(cam, 0, 0, 1, 1);
+    let tint = 'rgba(120,70,50,0.20)';
+    try { const px = bgc.getImageData(0, 0, 1, 1).data; tint = `rgba(${px[0]},${px[1]},${px[2]},0.20)`; } catch (e) { /* keep default */ }
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#3d1522'); g.addColorStop(0.75, '#2b1219'); g.addColorStop(1, '#59331f');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    const rg = ctx.createRadialGradient(W / 2, H * 0.42, 40, W / 2, H * 0.42, W * 0.62);
+    rg.addColorStop(0, tint); rg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#6d4423'; ctx.fillRect(0, H * 0.94, W, H * 0.06);
     const fg = ctx.createLinearGradient(0, H * 0.8, 0, H);
     fg.addColorStop(0, 'rgba(40,20,10,0)'); fg.addColorStop(1, 'rgba(40,20,10,0.55)');
-    ctx.fillStyle = fg; ctx.fillRect(0, H * 0.8, W, H * 0.2); ctx.restore();
+    ctx.fillStyle = fg; ctx.fillRect(0, H * 0.8, W, H * 0.2);
   } else {
     const g = ctx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, '#3d1522'); g.addColorStop(0.75, '#2b1219'); g.addColorStop(1, '#59331f');
@@ -620,12 +631,13 @@ function loop(ts) {
   dotFace.classList.toggle('on', !!state.face);
   fpsFrames++;
   if (ts - fpsLast > 1000) { fpsEl.textContent = Math.round(fpsEMA) + ' fps'; fpsFrames = 0; fpsLast = ts; }
-  // auto-quality: if the stage struggles, shed load once and say so in the ticket
-  if (state.mode === 'camera' && !state.autoBalanced && fpsEMA < 17 && state.quality === 'high') {
+  // auto-quality: if the stage struggles, shed load tier by tier and say so
+  if (state.mode === 'camera' && fpsEMA < 17 && state.quality !== 'performance') {
     if (!state.lowFpsSince) state.lowFpsSince = ts;
     if (ts - state.lowFpsSince > 5000) {
-      state.quality = 'balanced'; selQuality.value = 'balanced'; state.autoBalanced = true;
-      statusModel.textContent = 'Models: ready ✅ (auto-balanced for smoothness)';
+      state.quality = state.quality === 'high' ? 'balanced' : 'performance';
+      selQuality.value = state.quality; state.autoBalanced = true; state.lowFpsSince = 0;
+      statusModel.textContent = 'Models: ready ✅ (auto-' + state.quality + ' for smoothness)';
     }
   } else state.lowFpsSince = 0;
 }
@@ -634,7 +646,7 @@ function loop(ts) {
 btnCam.addEventListener('click', async () => {
   try {
     if (!poseL) await initModels();
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: true });
     cam.srcObject = stream; await cam.play();
     state.stream = stream; state.mode = 'camera';
     btnCam.textContent = '📷 Camera On ✅'; btnDemo.textContent = '🪄 Demo Mode'; btnRec.disabled = false;

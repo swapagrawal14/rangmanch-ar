@@ -229,6 +229,24 @@ await sleep(1100);
 results.checks.poseSelfieWave = await page.evaluate(() => window.__rangmanch.state.poseName);
 await shot('17-selfie-wave');
 
+// HALLUCINATED HIPS (her actual phone screenshot): pose reports hips with
+// GOOD visibility but BELOW the frame. Placement must ignore them and let
+// the face drive — v2.0.1 shrank the character onto a phantom torso.
+await page.evaluate(() => {
+  const R = window.__rangmanch;
+  const P = window.__selfiePose;
+  P[23] = { x: 0.44, y: 1.30, z: 0, visibility: 0.75 };
+  P[24] = { x: 0.56, y: 1.30, z: 0, visibility: 0.75 };
+  P[14] = { x: 0.67, y: 0.52, z: 0, visibility: 0.95 };
+  P[16] = { x: 0.70, y: 0.70, z: 0, visibility: 0.95 };
+  const fl = []; for (let i = 0; i < 468; i++) fl.push({ x: 0.38, y: 0.3, z: 0 });
+  fl[33] = { x: 0.32, y: 0.28, z: 0 }; fl[263] = { x: 0.44, y: 0.28, z: 0 }; fl[1] = { x: 0.38, y: 0.315, z: 0 };
+  R.raw.face = { landmarks: fl, cats: { eyeBlinkLeft: 0, eyeBlinkRight: 0, jawOpen: 0, mouthSmileLeft: 0, mouthSmileRight: 0, mouthFunnel: 0 } };
+});
+await sleep(1500);
+results.checks.facePlacementCx = await page.evaluate(() => Math.round(window.__rangmanch.state.fig.cx.x));
+await shot('18-hallucinated-hips');
+
 // recording round-trip (demo drives it)
 await page.selectOption('#cast-body', 'swapnil');
 await page.evaluate(() => { window.__rangmanch.state.mode = 'idle'; });
