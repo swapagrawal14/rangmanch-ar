@@ -1,2 +1,6 @@
 node_modules/
 tests/shots/
+__pycache__/
+# personal-use stock clips for live testing stay out of the repo
+*.y4m
+clips/

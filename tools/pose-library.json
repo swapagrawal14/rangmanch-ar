@@ -1,0 +1,331 @@
+{
+ "doodle-swapnil/clap": {
+  "align": "ncc",
+  "score": 0.927,
+  "bodyIoU": 0.772,
+  "autoSide": null,
+  "side": null
+ },
+ "doodle-swapnil/cover": {
+  "align": "framing",
+  "score": 0.469,
+  "bodyIoU": 0.772,
+  "autoSide": null,
+  "side": null
+ },
+ "doodle-swapnil/facepalm": {
+  "align": "framing",
+  "score": 0.537,
+  "bodyIoU": 0.878,
+  "autoSide": null,
+  "side": "L"
+ },
+ "doodle-swapnil/fist": {
+  "align": "ncc",
+  "score": 0.99,
+  "bodyIoU": 0.886,
+  "autoSide": "R",
+  "side": "R"
+ },
+ "doodle-swapnil/head": {
+  "align": "ncc",
+  "score": 0.917,
+  "bodyIoU": 0.772,
+  "autoSide": null,
+  "side": null
+ },
+ "doodle-swapnil/mouth": {
+  "align": "ncc",
+  "score": 0.711,
+  "bodyIoU": 0.876,
+  "autoSide": null,
+  "side": "L"
+ },
+ "doodle-swapnil/namaste": {
+  "align": "ncc",
+  "score": 0.988,
+  "bodyIoU": 0.772,
+  "autoSide": null,
+  "side": null
+ },
+ "doodle-swapnil/open": {
+  "align": "ncc",
+  "score": 0.99,
+  "bodyIoU": 0.773,
+  "autoSide": null,
+  "side": null
+ },
+ "doodle-swapnil/salute": {
+  "align": "ncc",
+  "score": 0.938,
+  "bodyIoU": 0.879,
+  "autoSide": "L",
+  "side": "L"
+ },
+ "doodle-swapnil/shh": {
+  "align": "ncc",
+  "score": 0.907,
+  "bodyIoU": 0.886,
+  "autoSide": null,
+  "side": "R"
+ },
+ "doodle-swapnil/think": {
+  "align": "ncc",
+  "score": 0.794,
+  "bodyIoU": 0.886,
+  "autoSide": null,
+  "side": "R"
+ },
+ "bunty/clap": {
+  "align": "ncc",
+  "score": 0.741,
+  "bodyIoU": 0.859,
+  "autoSide": null,
+  "side": null
+ },
+ "bunty/cover": {
+  "align": "framing",
+  "score": 0.541,
+  "bodyIoU": 0.781,
+  "autoSide": "R",
+  "side": null
+ },
+ "bunty/facepalm": {
+  "align": "framing",
+  "score": 0.573,
+  "bodyIoU": 0.86,
+  "autoSide": "R",
+  "side": "R"
+ },
+ "bunty/fist": {
+  "align": "framing",
+  "score": 0.655,
+  "bodyIoU": 0.848,
+  "autoSide": "L",
+  "side": "L"
+ },
+ "bunty/head": {
+  "align": "ncc",
+  "score": 0.834,
+  "bodyIoU": 0.704,
+  "autoSide": null,
+  "side": null
+ },
+ "bunty/mouth": {
+  "align": "framing",
+  "score": 0.655,
+  "bodyIoU": 0.893,
+  "autoSide": null,
+  "side": "R"
+ },
+ "bunty/namaste": {
+  "align": "ncc",
+  "score": 0.88,
+  "bodyIoU": 0.857,
+  "autoSide": null,
+  "side": null
+ },
+ "bunty/open": {
+  "align": "ncc",
+  "score": 0.95,
+  "bodyIoU": 0.716,
+  "autoSide": null,
+  "side": null
+ },
+ "bunty/salute": {
+  "align": "ncc",
+  "score": 0.983,
+  "bodyIoU": 0.848,
+  "autoSide": "L",
+  "side": "L"
+ },
+ "bunty/shh": {
+  "align": "ncc",
+  "score": 0.869,
+  "bodyIoU": 0.896,
+  "autoSide": null,
+  "side": "R"
+ },
+ "bunty/think": {
+  "align": "ncc",
+  "score": 0.847,
+  "bodyIoU": 0.902,
+  "autoSide": "R",
+  "side": "L"
+ },
+ "sanjay/cover": {
+  "align": "framing",
+  "score": 0.414,
+  "bodyIoU": 0.666,
+  "autoSide": "R",
+  "side": null
+ },
+ "sanjay/point": {
+  "align": "framing",
+  "score": 0.286,
+  "bodyIoU": 0.62,
+  "autoSide": null,
+  "side": "R"
+ },
+ "bunty/wave2": {
+  "align": "ncc",
+  "score": 0.957,
+  "bodyIoU": 0.645,
+  "autoSide": "L",
+  "side": "L"
+ },
+ "doodle-swapnil/wave2": {
+  "align": "ncc",
+  "score": 0.997,
+  "bodyIoU": 0.886,
+  "autoSide": "R",
+  "side": "R"
+ },
+ "sanjay/wave2": {
+  "align": "ncc",
+  "score": 0.776,
+  "bodyIoU": 0.694,
+  "autoSide": "L",
+  "side": "L"
+ },
+ "swapnil/wave2": {
+  "align": "framing",
+  "score": 0.662,
+  "bodyIoU": 0.708,
+  "autoSide": "L",
+  "side": "L"
+ },
+ "sanjay/clap": {
+  "align": "ncc",
+  "score": 0.745,
+  "bodyIoU": 0.786,
+  "autoSide": null,
+  "side": null
+ },
+ "sanjay/facepalm": {
+  "align": "framing",
+  "score": 0.33,
+  "bodyIoU": 0.808,
+  "autoSide": "L",
+  "side": "L"
+ },
+ "sanjay/fist": {
+  "align": "framing",
+  "score": 0.676,
+  "bodyIoU": 0.761,
+  "autoSide": "L",
+  "side": "L"
+ },
+ "sanjay/head": {
+  "align": "ncc",
+  "score": 0.733,
+  "bodyIoU": 0.651,
+  "autoSide": null,
+  "side": null
+ },
+ "sanjay/mouth": {
+  "align": "framing",
+  "score": 0.397,
+  "bodyIoU": 0.824,
+  "autoSide": "L",
+  "side": "R"
+ },
+ "sanjay/namaste": {
+  "align": "ncc",
+  "score": 0.982,
+  "bodyIoU": 0.728,
+  "autoSide": null,
+  "side": null
+ },
+ "sanjay/salute": {
+  "align": "ncc",
+  "score": 0.921,
+  "bodyIoU": 0.824,
+  "autoSide": "L",
+  "side": "L"
+ },
+ "sanjay/shh": {
+  "align": "ncc",
+  "score": 0.751,
+  "bodyIoU": 0.863,
+  "autoSide": "R",
+  "side": "L"
+ },
+ "sanjay/think": {
+  "align": "framing",
+  "score": 0.556,
+  "bodyIoU": 0.882,
+  "autoSide": null,
+  "side": "L"
+ },
+ "swapnil/clap": {
+  "align": "ncc",
+  "score": 0.929,
+  "bodyIoU": 0.825,
+  "autoSide": "R",
+  "side": null
+ },
+ "swapnil/cover": {
+  "align": "framing",
+  "score": 0.494,
+  "bodyIoU": 0.79,
+  "autoSide": "R",
+  "side": null
+ },
+ "swapnil/facepalm": {
+  "align": "framing",
+  "score": 0.47,
+  "bodyIoU": 0.888,
+  "autoSide": "R",
+  "side": "L"
+ },
+ "swapnil/fist": {
+  "align": "ncc",
+  "score": 0.941,
+  "bodyIoU": 0.904,
+  "autoSide": "L",
+  "side": "L"
+ },
+ "swapnil/head": {
+  "align": "ncc",
+  "score": 0.851,
+  "bodyIoU": 0.829,
+  "autoSide": "R",
+  "side": null
+ },
+ "swapnil/mouth": {
+  "align": "ncc",
+  "score": 0.72,
+  "bodyIoU": 0.904,
+  "autoSide": null,
+  "side": "L"
+ },
+ "swapnil/namaste": {
+  "align": "ncc",
+  "score": 0.982,
+  "bodyIoU": 0.829,
+  "autoSide": "R",
+  "side": null
+ },
+ "swapnil/salute": {
+  "align": "ncc",
+  "score": 0.79,
+  "bodyIoU": 0.792,
+  "autoSide": "L",
+  "side": "L"
+ },
+ "swapnil/shh": {
+  "align": "ncc",
+  "score": 0.935,
+  "bodyIoU": 0.904,
+  "autoSide": null,
+  "side": "L"
+ },
+ "swapnil/think": {
+  "align": "ncc",
+  "score": 0.725,
+  "bodyIoU": 0.903,
+  "autoSide": "R",
+  "side": "L"
+ }
+}

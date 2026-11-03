@@ -66,7 +66,10 @@ and camera-shy creator who can act but cannot animate.
 
 | You do this | The stage does this |
 |---|---|
-| Wave, point, throw both arms open, thumbs-up | The lead performs its own drawing of that gesture — with **either** arm (the drawing is mirrored to match), even when your other hand is holding the phone |
+| Wave, point, throw both arms open, thumbs-up | The lead performs its own drawing of that gesture — with **either** arm (the drawing is mirrored to match), even when your other hand is holding the phone. A real wave really waves: two drawn frames, cut in time with your hand |
+| Hand over your mouth, finger to your lips (shh), hand at your chin or cheek (thinking), palm on your forehead (facepalm), salute | The lead performs its own drawing of that gesture, read from where your fingers sit on your face |
+| Both hands over your face, both hands on your head, palms together (namaste), clap, raised fist | Same: each is its own authored drawing (Doodle Swapnil, Bunty, Swapnil and Sanjay have the full v2.2 set; other characters fall back to their nearest pose) |
+| Tilt, turn, nod or shake your head | The lead's head follows yours (a gentle warp of the drawing around the neck — the body stays put) |
 | Move, lean, step closer or back | The lead stands where you stand: its face on your face at selfie distance, its body on yours when you step back, and it leans with you |
 | Open your mouth / make an O / smile / laugh | Lead's mouth becomes **A / O / E** — laugh gets the big grin — the Rigpop Talk patches, composited on every pose, for all 16 characters |
 | Blink | Lead blinks |
@@ -87,13 +90,15 @@ and camera-shy creator who can act but cannot animate.
 ```
 Camera + Mic ──► MediaPipe Tasks Vision (WASM, GPU→CPU fallback, lite models)
                    ├─ PoseLandmarker   33 pts        ─┐
-                   ├─ HandLandmarker   2 × 21 pts    ─┼─► Performance engine
+                   ├─ HandLandmarker   2 × 21 pts    ─┼─► Performance engine (+ gestures.js: hands vs face)
                    └─ FaceLandmarker   52 blendshapes─┘    ├─ body → gesture classifier (hysteresis,
                                                             │    visibility refusal) → authored pose;
                                                             │    torso → figure placement (One Euro)
                                                             ├─ hands → co-actor entrance/walk, pinch = talk
-                                                            └─ face  → A/O/E mouths + blink + laugh,
-                                                                 at each pose's own measured anchors
+                                                            ├─ face  → A/O/E mouths + blink + laugh,
+                                                            │    at each pose's own measured anchors
+                                                            └─ head  → tilt/turn/nod/shake → head warp
+                                                                 (headwarp.js, WebGL)
 Characters ────► Rigpop Forge packs, consumed as-is
                  (character.rigpop.json: base + wave/point/open/thumbs pose
                  drawings + A/O/E/blink patch tiles + per-pose face anchors)
@@ -114,7 +119,15 @@ sags the stage sheds load automatically and tells you on the ticket.
 
 ## Testing
 
-`node tests/v21.test.mjs` is the assert-based regression suite (37 checks at
+`node tests/v22.test.mjs` covers v2.2 (80 checks): the hand + face gesture
+classifier on synthetic landmark fixtures (`tests/fixtures.mjs`, at two
+distances), the head tracker and head warp, lazy loading of the v2.2 art, the
+new poses on stage with the right face tiles, fallbacks for characters without
+the art, the two-frame wave and no flicker. v2.2 was also checked live with the
+real MediaPipe models against a fake camera playing a clip of real people
+performing the gestures; the hand-at-face thresholds were tuned on it.
+
+`node tests/v21.test.mjs` is the v2.1 regression suite (39 checks at
 phone size: first-load weight, layout and overflow at 390×844, per-arm
 gestures, mirroring, flicker, pose normalisation, face anchors for all 16
 packs, camera-denied handling, MP4 recording at 9:16 and the WebM duration
@@ -150,7 +163,9 @@ Engineering choices that matter:
   (that pose plays without face tiles) rather than guessed.
 - **Gestures with either arm.** Each arm is read on its own, in shoulder-width
   units, with time-based hysteresis (enter 160 ms, leave 450 ms, hold
-  600 ms). The gesture's side is known for every drawing, and the drawing is
+  600 ms; hand-at-face poses enter after 200 ms, and while one is on stage
+  your last face position is held for up to 3 s, because a hand over your face
+  hides it from the face model). The gesture's side is known for every drawing, and the drawing is
   mirrored when you use the other arm.
 - **Never a blank screen.** Demo Mode drives the whole cast with synthetic
   landmarks, so anyone (including judges) can see it without a camera.
@@ -200,6 +215,7 @@ README visuals are generated from the packs' real art by
 - [x] v0.5 — **Total Replacement**: raw camera self is never drawn (room becomes blurred backdrop colour), character sized to fully cover you, separate head piece that turns/tilts with your gaze, laugh-sensitive mouth, co-actors off by default
 - [x] v2.0 — **Stage Puppet**: authored poses + gesture classifier, cut-out rig removed
 - [x] v2.1 — **Phone first**: the stage fills a portrait phone (9:16 by default), camera on first tap, 29 MB → 0.7 MB first load, gestures with either arm (selfie-safe) and mirrored drawings, pose swaps without size jumps, face anchors for all 16 characters, MP4 recording + share sheet, WebM duration fix
+- [x] v2.2 — **Hands and head**: the head follows yours (tilt, turn, nod, shake), hand-at-face and two-hand gestures (hand on mouth, shh, thinking, facepalm, salute, cover, hands on head, namaste, clap, fist) each performed as its own drawing, a wave that really waves (two frames)
 - [ ] Per-character voice pitch for takes, scene list / multi-take editor
 - [ ] Vendored models for a fully offline build
 - [ ] The demo reel: *Germ vs Toothbrush*, performed entirely inside Rangmanch

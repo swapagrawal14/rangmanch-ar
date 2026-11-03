@@ -5,27 +5,97 @@
    "base": {
     "scale": 1.0,
     "hand": true,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      359.5,
+      186.4
+     ],
+     "r": [
+      111.2,
+      154.4
+     ],
+     "pivot": [
+      359.5,
+      359.4
+     ]
+    }
    },
    "wave": {
     "scale": 0.98,
     "hand": true,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      384.0,
+      238.5
+     ],
+     "r": [
+      109.0,
+      151.3
+     ],
+     "pivot": [
+      384.0,
+      408.0
+     ]
+    }
    },
    "point": {
     "scale": 1.0,
     "hand": true,
-    "side": "R"
+    "side": "R",
+    "head": {
+     "c": [
+      206.0,
+      174.4
+     ],
+     "r": [
+      111.2,
+      154.4
+     ],
+     "pivot": [
+      206.0,
+      347.4
+     ]
+    }
    },
    "open": {
     "scale": 0.92,
     "hand": true,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      359.5,
+      165.3
+     ],
+     "r": [
+      102.3,
+      142.0
+     ],
+     "pivot": [
+      359.5,
+      324.4
+     ]
+    }
    },
    "thumbs": {
     "scale": 1.03,
     "hand": true,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      355.5,
+      188.3
+     ],
+     "r": [
+      114.5,
+      159.0
+     ],
+     "pivot": [
+      355.5,
+      366.5
+     ]
+    }
    }
   },
   "bubbles": {
@@ -39,7 +109,21 @@
      264
     ],
     "scale": 1.0,
-    "score": 1.0
+    "score": 1.0,
+    "head": {
+     "c": [
+      352.0,
+      226.2
+     ],
+     "r": [
+      117.8,
+      141.4
+     ],
+     "pivot": [
+      352.0,
+      384.6
+     ]
+    }
    },
    "wave": {
     "mouth": [
@@ -52,7 +136,21 @@
     ],
     "scale": 0.98,
     "score": 0.617,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      351.0,
+      233.0
+     ],
+     "r": [
+      115.4,
+      138.6
+     ],
+     "pivot": [
+      351.0,
+      388.2
+     ]
+    }
    },
    "thumbs": {
     "mouth": [
@@ -65,7 +163,21 @@
     ],
     "scale": 0.98,
     "score": 0.619,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      398.0,
+      228.0
+     ],
+     "r": [
+      115.4,
+      138.6
+     ],
+     "pivot": [
+      398.0,
+      383.2
+     ]
+    }
    },
    "point": {
     "side": "R",
@@ -87,7 +199,21 @@
      388
     ],
     "scale": 1.0,
-    "score": 1.0
+    "score": 1.0,
+    "head": {
+     "c": [
+      359.5,
+      345.2
+     ],
+     "r": [
+      229.6,
+      245.2
+     ],
+     "pivot": [
+      359.5,
+      619.9
+     ]
+    }
    },
    "wave": {
     "mouth": [
@@ -100,7 +226,21 @@
     ],
     "scale": 0.9,
     "score": 0.957,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      415.5,
+      405.5
+     ],
+     "r": [
+      206.6,
+      220.7
+     ],
+     "pivot": [
+      415.5,
+      652.7
+     ]
+    }
    },
    "point": {
     "mouth": [
@@ -113,20 +253,53 @@
     ],
     "scale": 0.75,
     "score": 0.897,
-    "side": "R"
+    "side": "R",
+    "head": {
+     "c": [
+      292.5,
+      471.6
+     ],
+     "r": [
+      172.2,
+      183.9
+     ],
+     "pivot": [
+      292.5,
+      677.7
+     ]
+    }
    },
    "open": {
+    "file": "talk/v22/pose_open.webp",
     "mouth": [
-     364,
-     602
+     360,
+     478
     ],
     "eyes": [
-     364,
-     537
+     359,
+     388
     ],
-    "scale": 0.72,
-    "score": 0.997,
-    "side": null
+    "scale": 1.0,
+    "score": 0.95,
+    "side": null,
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      359.5,
+      345.2
+     ],
+     "r": [
+      229.6,
+      245.2
+     ],
+     "pivot": [
+      359.5,
+      619.9
+     ]
+    }
    },
    "thumbs": {
     "mouth": [
@@ -139,7 +312,373 @@
     ],
     "scale": 0.82,
     "score": 0.952,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      444.5,
+      453.0
+     ],
+     "r": [
+      188.3,
+      201.1
+     ],
+     "pivot": [
+      444.5,
+      678.3
+     ]
+    }
+   },
+   "clap": {
+    "file": "talk/v22/pose_clap.webp",
+    "mouth": [
+     360,
+     475
+    ],
+    "eyes": [
+     359,
+     382
+    ],
+    "scale": 1.03,
+    "score": 0.741,
+    "side": null,
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      359.5,
+      338.1
+     ],
+     "r": [
+      236.5,
+      252.6
+     ],
+     "pivot": [
+      359.5,
+      621.0
+     ]
+    }
+   },
+   "cover": {
+    "file": "talk/v22/pose_cover.webp",
+    "mouth": [
+     360,
+     478
+    ],
+    "eyes": [
+     359,
+     388
+    ],
+    "scale": 1.0,
+    "score": 0.541,
+    "side": null,
+    "face": "none",
+    "headWarp": false,
+    "v22": true,
+    "align": "framing",
+    "head": {
+     "c": [
+      359.5,
+      345.2
+     ],
+     "r": [
+      229.6,
+      245.2
+     ],
+     "pivot": [
+      359.5,
+      619.9
+     ]
+    }
+   },
+   "facepalm": {
+    "file": "talk/v22/pose_facepalm.webp",
+    "mouth": [
+     360,
+     478
+    ],
+    "eyes": [
+     359,
+     388
+    ],
+    "scale": 1.0,
+    "score": 0.573,
+    "side": "R",
+    "face": "mouth",
+    "headWarp": false,
+    "v22": true,
+    "align": "framing",
+    "head": {
+     "c": [
+      359.5,
+      345.2
+     ],
+     "r": [
+      229.6,
+      245.2
+     ],
+     "pivot": [
+      359.5,
+      619.9
+     ]
+    }
+   },
+   "fist": {
+    "file": "talk/v22/pose_fist.webp",
+    "mouth": [
+     360,
+     478
+    ],
+    "eyes": [
+     359,
+     388
+    ],
+    "scale": 1.0,
+    "score": 0.655,
+    "side": "L",
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "framing",
+    "head": {
+     "c": [
+      359.5,
+      345.2
+     ],
+     "r": [
+      229.6,
+      245.2
+     ],
+     "pivot": [
+      359.5,
+      619.9
+     ]
+    }
+   },
+   "head": {
+    "file": "talk/v22/pose_head.webp",
+    "mouth": [
+     360,
+     478
+    ],
+    "eyes": [
+     359,
+     388
+    ],
+    "scale": 1.0,
+    "score": 0.834,
+    "side": null,
+    "face": "full",
+    "headWarp": false,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      359.5,
+      345.2
+     ],
+     "r": [
+      229.6,
+      245.2
+     ],
+     "pivot": [
+      359.5,
+      619.9
+     ]
+    }
+   },
+   "mouth": {
+    "file": "talk/v22/pose_mouth.webp",
+    "mouth": [
+     360,
+     478
+    ],
+    "eyes": [
+     359,
+     388
+    ],
+    "scale": 1.0,
+    "score": 0.655,
+    "side": "R",
+    "face": "eyes",
+    "headWarp": false,
+    "v22": true,
+    "align": "framing",
+    "head": {
+     "c": [
+      359.5,
+      345.2
+     ],
+     "r": [
+      229.6,
+      245.2
+     ],
+     "pivot": [
+      359.5,
+      619.9
+     ]
+    }
+   },
+   "namaste": {
+    "file": "talk/v22/pose_namaste.webp",
+    "mouth": [
+     360,
+     478
+    ],
+    "eyes": [
+     359,
+     388
+    ],
+    "scale": 1.0,
+    "score": 0.88,
+    "side": null,
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      359.5,
+      345.2
+     ],
+     "r": [
+      229.6,
+      245.2
+     ],
+     "pivot": [
+      359.5,
+      619.9
+     ]
+    }
+   },
+   "salute": {
+    "file": "talk/v22/pose_salute.webp",
+    "mouth": [
+     361,
+     478
+    ],
+    "eyes": [
+     360,
+     388
+    ],
+    "scale": 1.0,
+    "score": 0.983,
+    "side": "L",
+    "face": "full",
+    "headWarp": false,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      360.5,
+      345.2
+     ],
+     "r": [
+      229.6,
+      245.2
+     ],
+     "pivot": [
+      360.5,
+      619.9
+     ]
+    }
+   },
+   "shh": {
+    "file": "talk/v22/pose_shh.webp",
+    "mouth": [
+     360,
+     478
+    ],
+    "eyes": [
+     359,
+     388
+    ],
+    "scale": 1.0,
+    "score": 0.869,
+    "side": "R",
+    "face": "eyes",
+    "headWarp": false,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      359.5,
+      345.2
+     ],
+     "r": [
+      229.6,
+      245.2
+     ],
+     "pivot": [
+      359.5,
+      619.9
+     ]
+    }
+   },
+   "think": {
+    "file": "talk/v22/pose_think.webp",
+    "mouth": [
+     362,
+     481
+    ],
+    "eyes": [
+     361,
+     392
+    ],
+    "scale": 0.98,
+    "score": 0.847,
+    "side": "L",
+    "face": "full",
+    "headWarp": false,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      361.5,
+      350.5
+     ],
+     "r": [
+      225.0,
+      240.3
+     ],
+     "pivot": [
+      361.5,
+      619.7
+     ]
+    }
+   },
+   "wave2": {
+    "file": "talk/v22/pose_wave2.webp",
+    "mouth": [
+     416,
+     525
+    ],
+    "eyes": [
+     415,
+     444
+    ],
+    "scale": 0.9,
+    "score": 0.957,
+    "side": "L",
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      415.5,
+      405.5
+     ],
+     "r": [
+      206.6,
+      220.7
+     ],
+     "pivot": [
+      415.5,
+      652.7
+     ]
+    }
    }
   },
   "doodle-swapnil": {
@@ -153,7 +692,21 @@
      176
     ],
     "scale": 1.0,
-    "score": 1.0
+    "score": 1.0,
+    "head": {
+     "c": [
+      361.0,
+      160.4
+     ],
+     "r": [
+      101.8,
+      141.4
+     ],
+     "pivot": [
+      361.0,
+      318.8
+     ]
+    }
    },
    "wave": {
     "mouth": [
@@ -166,7 +719,21 @@
     ],
     "scale": 1.0,
     "score": 0.999,
-    "side": "R"
+    "side": "R",
+    "head": {
+     "c": [
+      361.5,
+      160.4
+     ],
+     "r": [
+      101.8,
+      141.4
+     ],
+     "pivot": [
+      361.5,
+      318.8
+     ]
+    }
    },
    "point": {
     "mouth": [
@@ -179,20 +746,53 @@
     ],
     "scale": 1.0,
     "score": 0.999,
-    "side": "R"
+    "side": "R",
+    "head": {
+     "c": [
+      361.5,
+      160.4
+     ],
+     "r": [
+      101.8,
+      141.4
+     ],
+     "pivot": [
+      361.5,
+      318.8
+     ]
+    }
    },
    "open": {
+    "file": "talk/v22/pose_open.webp",
     "mouth": [
      362,
      244
     ],
     "eyes": [
-     361,
+     360,
      176
     ],
     "scale": 1.0,
-    "score": 0.999,
-    "side": null
+    "score": 0.99,
+    "side": null,
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      361.0,
+      160.4
+     ],
+     "r": [
+      101.8,
+      141.4
+     ],
+     "pivot": [
+      361.0,
+      318.8
+     ]
+    }
    },
    "thumbs": {
     "mouth": [
@@ -205,7 +805,373 @@
     ],
     "scale": 1.0,
     "score": 0.999,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      361.5,
+      160.4
+     ],
+     "r": [
+      101.8,
+      141.4
+     ],
+     "pivot": [
+      361.5,
+      318.8
+     ]
+    }
+   },
+   "clap": {
+    "file": "talk/v22/pose_clap.webp",
+    "mouth": [
+     362,
+     244
+    ],
+    "eyes": [
+     360,
+     176
+    ],
+    "scale": 1.0,
+    "score": 0.927,
+    "side": null,
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      361.0,
+      160.4
+     ],
+     "r": [
+      101.8,
+      141.4
+     ],
+     "pivot": [
+      361.0,
+      318.8
+     ]
+    }
+   },
+   "cover": {
+    "file": "talk/v22/pose_cover.webp",
+    "mouth": [
+     362,
+     244
+    ],
+    "eyes": [
+     360,
+     176
+    ],
+    "scale": 1.0,
+    "score": 0.469,
+    "side": null,
+    "face": "none",
+    "headWarp": false,
+    "v22": true,
+    "align": "framing",
+    "head": {
+     "c": [
+      361.0,
+      160.4
+     ],
+     "r": [
+      101.8,
+      141.4
+     ],
+     "pivot": [
+      361.0,
+      318.8
+     ]
+    }
+   },
+   "facepalm": {
+    "file": "talk/v22/pose_facepalm.webp",
+    "mouth": [
+     362,
+     244
+    ],
+    "eyes": [
+     360,
+     176
+    ],
+    "scale": 1.0,
+    "score": 0.537,
+    "side": "L",
+    "face": "mouth",
+    "headWarp": false,
+    "v22": true,
+    "align": "framing",
+    "head": {
+     "c": [
+      361.0,
+      160.4
+     ],
+     "r": [
+      101.8,
+      141.4
+     ],
+     "pivot": [
+      361.0,
+      318.8
+     ]
+    }
+   },
+   "fist": {
+    "file": "talk/v22/pose_fist.webp",
+    "mouth": [
+     362,
+     244
+    ],
+    "eyes": [
+     360,
+     176
+    ],
+    "scale": 1.0,
+    "score": 0.99,
+    "side": "R",
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      361.0,
+      160.4
+     ],
+     "r": [
+      101.8,
+      141.4
+     ],
+     "pivot": [
+      361.0,
+      318.8
+     ]
+    }
+   },
+   "head": {
+    "file": "talk/v22/pose_head.webp",
+    "mouth": [
+     362,
+     244
+    ],
+    "eyes": [
+     360,
+     176
+    ],
+    "scale": 1.0,
+    "score": 0.917,
+    "side": null,
+    "face": "full",
+    "headWarp": false,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      361.0,
+      160.4
+     ],
+     "r": [
+      101.8,
+      141.4
+     ],
+     "pivot": [
+      361.0,
+      318.8
+     ]
+    }
+   },
+   "mouth": {
+    "file": "talk/v22/pose_mouth.webp",
+    "mouth": [
+     362,
+     244
+    ],
+    "eyes": [
+     360,
+     176
+    ],
+    "scale": 1.0,
+    "score": 0.711,
+    "side": "L",
+    "face": "eyes",
+    "headWarp": false,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      361.0,
+      160.4
+     ],
+     "r": [
+      101.8,
+      141.4
+     ],
+     "pivot": [
+      361.0,
+      318.8
+     ]
+    }
+   },
+   "namaste": {
+    "file": "talk/v22/pose_namaste.webp",
+    "mouth": [
+     362,
+     244
+    ],
+    "eyes": [
+     360,
+     176
+    ],
+    "scale": 1.0,
+    "score": 0.988,
+    "side": null,
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      361.0,
+      160.4
+     ],
+     "r": [
+      101.8,
+      141.4
+     ],
+     "pivot": [
+      361.0,
+      318.8
+     ]
+    }
+   },
+   "salute": {
+    "file": "talk/v22/pose_salute.webp",
+    "mouth": [
+     362,
+     244
+    ],
+    "eyes": [
+     360,
+     176
+    ],
+    "scale": 1.0,
+    "score": 0.938,
+    "side": "L",
+    "face": "full",
+    "headWarp": false,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      361.0,
+      160.4
+     ],
+     "r": [
+      101.8,
+      141.4
+     ],
+     "pivot": [
+      361.0,
+      318.8
+     ]
+    }
+   },
+   "shh": {
+    "file": "talk/v22/pose_shh.webp",
+    "mouth": [
+     362,
+     244
+    ],
+    "eyes": [
+     360,
+     176
+    ],
+    "scale": 1.0,
+    "score": 0.907,
+    "side": "R",
+    "face": "eyes",
+    "headWarp": false,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      361.0,
+      160.4
+     ],
+     "r": [
+      101.8,
+      141.4
+     ],
+     "pivot": [
+      361.0,
+      318.8
+     ]
+    }
+   },
+   "think": {
+    "file": "talk/v22/pose_think.webp",
+    "mouth": [
+     362,
+     244
+    ],
+    "eyes": [
+     360,
+     176
+    ],
+    "scale": 1.0,
+    "score": 0.794,
+    "side": "R",
+    "face": "full",
+    "headWarp": false,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      361.0,
+      160.4
+     ],
+     "r": [
+      101.8,
+      141.4
+     ],
+     "pivot": [
+      361.0,
+      318.8
+     ]
+    }
+   },
+   "wave2": {
+    "file": "talk/v22/pose_wave2.webp",
+    "mouth": [
+     362,
+     244
+    ],
+    "eyes": [
+     360,
+     176
+    ],
+    "scale": 1.0,
+    "score": 0.997,
+    "side": "R",
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      361.0,
+      160.4
+     ],
+     "r": [
+      101.8,
+      141.4
+     ],
+     "pivot": [
+      361.0,
+      318.8
+     ]
+    }
    }
   },
   "kiko": {
@@ -219,7 +1185,21 @@
      358
     ],
     "scale": 1.0,
-    "score": 1.0
+    "score": 1.0,
+    "head": {
+     "c": [
+      360.5,
+      316.1
+     ],
+     "r": [
+      112.7,
+      156.6
+     ],
+     "pivot": [
+      360.5,
+      491.5
+     ]
+    }
    },
    "wave": {
     "mouth": [
@@ -232,7 +1212,21 @@
     ],
     "scale": 0.98,
     "score": 0.564,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      395.5,
+      307.1
+     ],
+     "r": [
+      110.4,
+      153.5
+     ],
+     "pivot": [
+      395.5,
+      478.9
+     ]
+    }
    },
    "open": {
     "mouth": [
@@ -245,7 +1239,21 @@
     ],
     "scale": 0.86,
     "score": 0.649,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      366.5,
+      413.3
+     ],
+     "r": [
+      96.9,
+      134.7
+     ],
+     "pivot": [
+      366.5,
+      564.1
+     ]
+    }
    },
    "thumbs": {
     "mouth": [
@@ -258,7 +1266,21 @@
     ],
     "scale": 1.0,
     "score": 0.708,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      373.5,
+      310.1
+     ],
+     "r": [
+      112.7,
+      156.6
+     ],
+     "pivot": [
+      373.5,
+      485.5
+     ]
+    }
    },
    "point": {
     "side": "R",
@@ -276,7 +1298,21 @@
      343
     ],
     "scale": 1.0,
-    "score": 1.0
+    "score": 1.0,
+    "head": {
+     "c": [
+      357.5,
+      310.6
+     ],
+     "r": [
+      87.3,
+      121.2
+     ],
+     "pivot": [
+      357.5,
+      446.3
+     ]
+    }
    },
    "open": {
     "mouth": [
@@ -289,7 +1325,21 @@
     ],
     "scale": 0.73,
     "score": 0.895,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      358.0,
+      469.3
+     ],
+     "r": [
+      63.7,
+      88.5
+     ],
+     "pivot": [
+      358.0,
+      568.4
+     ]
+    }
    },
    "wave": {
     "side": "L",
@@ -315,7 +1365,21 @@
      165
     ],
     "scale": 1.0,
-    "score": 1.0
+    "score": 1.0,
+    "head": {
+     "c": [
+      356.5,
+      147.5
+     ],
+     "r": [
+      83.2,
+      115.5
+     ],
+     "pivot": [
+      356.5,
+      276.9
+     ]
+    }
    },
    "wave": {
     "mouth": [
@@ -328,7 +1392,21 @@
     ],
     "scale": 1.0,
     "score": 0.872,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      396.5,
+      153.5
+     ],
+     "r": [
+      83.2,
+      115.5
+     ],
+     "pivot": [
+      396.5,
+      282.9
+     ]
+    }
    },
    "point": {
     "mouth": [
@@ -341,7 +1419,21 @@
     ],
     "scale": 1.0,
     "score": 0.595,
-    "side": "R"
+    "side": "R",
+    "head": {
+     "c": [
+      255.5,
+      141.5
+     ],
+     "r": [
+      83.2,
+      115.5
+     ],
+     "pivot": [
+      255.5,
+      270.9
+     ]
+    }
    },
    "open": {
     "mouth": [
@@ -354,7 +1446,21 @@
     ],
     "scale": 0.87,
     "score": 0.847,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      350.5,
+      263.2
+     ],
+     "r": [
+      72.4,
+      100.5
+     ],
+     "pivot": [
+      350.5,
+      375.8
+     ]
+    }
    },
    "thumbs": {
     "mouth": [
@@ -367,7 +1473,21 @@
     ],
     "scale": 1.0,
     "score": 0.962,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      358.5,
+      149.5
+     ],
+     "r": [
+      83.2,
+      115.5
+     ],
+     "pivot": [
+      358.5,
+      278.9
+     ]
+    }
    }
   },
   "mocha": {
@@ -381,7 +1501,21 @@
      370
     ],
     "scale": 1.0,
-    "score": 1.0
+    "score": 1.0,
+    "head": {
+     "c": [
+      351.0,
+      297.2
+     ],
+     "r": [
+      188.2,
+      237.7
+     ],
+     "pivot": [
+      351.0,
+      563.4
+     ]
+    }
    },
    "open": {
     "mouth": [
@@ -394,7 +1528,21 @@
     ],
     "scale": 0.7,
     "score": 0.853,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      355.5,
+      457.6
+     ],
+     "r": [
+      131.7,
+      166.4
+     ],
+     "pivot": [
+      355.5,
+      643.9
+     ]
+    }
    },
    "thumbs": {
     "mouth": [
@@ -407,7 +1555,21 @@
     ],
     "scale": 0.83,
     "score": 0.547,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      393.5,
+      386.3
+     ],
+     "r": [
+      156.2,
+      197.3
+     ],
+     "pivot": [
+      393.5,
+      607.3
+     ]
+    }
    },
    "wave": {
     "side": "R",
@@ -429,7 +1591,22 @@
      477
     ],
     "scale": 1.0,
-    "score": 1.0
+    "score": 1.0,
+    "head": {
+     "c": [
+      360.5,
+      433.8
+     ],
+     "r": [
+      152.5,
+      161.6
+     ],
+     "pivot": [
+      360.5,
+      614.8
+     ],
+     "nowarp": true
+    }
    },
    "open": {
     "mouth": [
@@ -442,7 +1619,22 @@
     ],
     "scale": 0.75,
     "score": 0.73,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      361.0,
+      542.6
+     ],
+     "r": [
+      114.4,
+      121.2
+     ],
+     "pivot": [
+      361.0,
+      678.3
+     ],
+     "nowarp": true
+    }
    },
    "thumbs": {
     "mouth": [
@@ -455,7 +1647,22 @@
     ],
     "scale": 0.95,
     "score": 0.598,
-    "side": "R"
+    "side": "R",
+    "head": {
+     "c": [
+      287.5,
+      470.1
+     ],
+     "r": [
+      144.9,
+      153.5
+     ],
+     "pivot": [
+      287.5,
+      642.0
+     ],
+     "nowarp": true
+    }
    },
    "wave": {
     "side": "L",
@@ -477,7 +1684,22 @@
      346
     ],
     "scale": 1.0,
-    "score": 1.0
+    "score": 1.0,
+    "head": {
+     "c": [
+      360.0,
+      314.1
+     ],
+     "r": [
+      210.8,
+      215.1
+     ],
+     "pivot": [
+      360.0,
+      555.0
+     ],
+     "nowarp": true
+    }
    },
    "wave": {
     "mouth": [
@@ -490,7 +1712,22 @@
     ],
     "scale": 0.95,
     "score": 0.716,
-    "side": "R"
+    "side": "R",
+    "head": {
+     "c": [
+      327.0,
+      338.7
+     ],
+     "r": [
+      200.3,
+      204.3
+     ],
+     "pivot": [
+      327.0,
+      567.5
+     ],
+     "nowarp": true
+    }
    },
    "point": {
     "mouth": [
@@ -503,7 +1740,22 @@
     ],
     "scale": 0.83,
     "score": 0.759,
-    "side": "R"
+    "side": "R",
+    "head": {
+     "c": [
+      308.0,
+      400.4
+     ],
+     "r": [
+      175.0,
+      178.5
+     ],
+     "pivot": [
+      308.0,
+      600.4
+     ],
+     "nowarp": true
+    }
    },
    "open": {
     "mouth": [
@@ -516,7 +1768,22 @@
     ],
     "scale": 0.75,
     "score": 0.907,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      361.0,
+      454.0
+     ],
+     "r": [
+      158.1,
+      161.3
+     ],
+     "pivot": [
+      361.0,
+      634.6
+     ],
+     "nowarp": true
+    }
    },
    "thumbs": {
     "mouth": [
@@ -529,7 +1796,22 @@
     ],
     "scale": 0.85,
     "score": 0.768,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      407.0,
+      386.8
+     ],
+     "r": [
+      179.2,
+      182.8
+     ],
+     "pivot": [
+      407.0,
+      591.6
+     ],
+     "nowarp": true
+    }
    }
   },
   "rafi": {
@@ -543,7 +1825,21 @@
      219
     ],
     "scale": 1.0,
-    "score": 1.0
+    "score": 1.0,
+    "head": {
+     "c": [
+      355.5,
+      186.6
+     ],
+     "r": [
+      87.3,
+      121.2
+     ],
+     "pivot": [
+      355.5,
+      322.3
+     ]
+    }
    },
    "wave": {
     "mouth": [
@@ -556,7 +1852,21 @@
     ],
     "scale": 1.0,
     "score": 0.667,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      410.5,
+      186.6
+     ],
+     "r": [
+      87.3,
+      121.2
+     ],
+     "pivot": [
+      410.5,
+      322.3
+     ]
+    }
    },
    "point": {
     "mouth": [
@@ -569,7 +1879,21 @@
     ],
     "scale": 1.02,
     "score": 0.704,
-    "side": "R"
+    "side": "R",
+    "head": {
+     "c": [
+      256.5,
+      183.0
+     ],
+     "r": [
+      89.0,
+      123.6
+     ],
+     "pivot": [
+      256.5,
+      321.4
+     ]
+    }
    },
    "open": {
     "mouth": [
@@ -582,7 +1906,21 @@
     ],
     "scale": 0.8,
     "score": 0.98,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      357.5,
+      347.9
+     ],
+     "r": [
+      69.8,
+      97.0
+     ],
+     "pivot": [
+      357.5,
+      456.4
+     ]
+    }
    },
    "thumbs": {
     "mouth": [
@@ -595,61 +1933,580 @@
     ],
     "scale": 1.02,
     "score": 0.979,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      375.5,
+      187.0
+     ],
+     "r": [
+      89.0,
+      123.6
+     ],
+     "pivot": [
+      375.5,
+      325.4
+     ]
+    }
    }
   },
   "sanjay": {
    "base": {
     "scale": 1.0,
     "hand": true,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      359.0,
+      184.3
+     ],
+     "r": [
+      109.7,
+      152.3
+     ],
+     "pivot": [
+      359.0,
+      355.0
+     ]
+    }
    },
    "wave": {
     "scale": 1.03,
     "hand": true,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      384.0,
+      189.5
+     ],
+     "r": [
+      113.0,
+      156.9
+     ],
+     "pivot": [
+      384.0,
+      365.4
+     ]
+    }
    },
    "point": {
+    "file": "talk/v22/pose_point.webp",
+    "mouth": [
+     359,
+     267
+    ],
+    "eyes": [
+     359,
+     185
+    ],
     "scale": 1.0,
-    "hand": true,
-    "side": "R"
+    "score": 0.286,
+    "side": "R",
+    "face": "none",
+    "headWarp": true,
+    "v22": true,
+    "align": "framing",
+    "head": {
+     "c": [
+      359.0,
+      184.3
+     ],
+     "r": [
+      109.7,
+      152.3
+     ],
+     "pivot": [
+      359.0,
+      355.0
+     ]
+    }
    },
    "open": {
     "scale": 0.98,
     "hand": true,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      388.0,
+      184.6
+     ],
+     "r": [
+      107.5,
+      149.3
+     ],
+     "pivot": [
+      388.0,
+      351.9
+     ]
+    }
    },
    "thumbs": {
     "scale": 1.05,
     "hand": true,
-    "side": "R"
+    "side": "R",
+    "head": {
+     "c": [
+      380.0,
+      191.7
+     ],
+     "r": [
+      115.2,
+      159.9
+     ],
+     "pivot": [
+      380.0,
+      371.0
+     ]
+    }
+   },
+   "cover": {
+    "file": "talk/v22/pose_cover.webp",
+    "mouth": [
+     359,
+     267
+    ],
+    "eyes": [
+     359,
+     185
+    ],
+    "scale": 1.0,
+    "score": 0.414,
+    "side": null,
+    "face": "none",
+    "headWarp": false,
+    "v22": true,
+    "align": "framing",
+    "head": {
+     "c": [
+      359.0,
+      184.3
+     ],
+     "r": [
+      109.7,
+      152.3
+     ],
+     "pivot": [
+      359.0,
+      355.0
+     ]
+    }
+   },
+   "wave2": {
+    "file": "talk/v22/pose_wave2.webp",
+    "mouth": [
+     385,
+     275
+    ],
+    "eyes": [
+     385,
+     191
+    ],
+    "scale": 1.03,
+    "score": 0.776,
+    "side": "L",
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      385.0,
+      190.0
+     ],
+     "r": [
+      113.0,
+      156.9
+     ],
+     "pivot": [
+      385.0,
+      365.9
+     ]
+    }
+   },
+   "clap": {
+    "file": "talk/v22/pose_clap.webp",
+    "mouth": [
+     359,
+     266
+    ],
+    "eyes": [
+     359,
+     184
+    ],
+    "scale": 1.0,
+    "score": 0.745,
+    "side": null,
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      359.0,
+      183.3
+     ],
+     "r": [
+      109.7,
+      152.3
+     ],
+     "pivot": [
+      359.0,
+      354.0
+     ]
+    }
+   },
+   "facepalm": {
+    "file": "talk/v22/pose_facepalm.webp",
+    "mouth": [
+     359,
+     267
+    ],
+    "eyes": [
+     359,
+     185
+    ],
+    "scale": 1.0,
+    "score": 0.33,
+    "side": "L",
+    "face": "mouth",
+    "headWarp": false,
+    "v22": true,
+    "align": "framing",
+    "head": {
+     "c": [
+      359.0,
+      184.3
+     ],
+     "r": [
+      109.7,
+      152.3
+     ],
+     "pivot": [
+      359.0,
+      355.0
+     ]
+    }
+   },
+   "fist": {
+    "file": "talk/v22/pose_fist.webp",
+    "mouth": [
+     359,
+     267
+    ],
+    "eyes": [
+     359,
+     185
+    ],
+    "scale": 1.0,
+    "score": 0.676,
+    "side": "L",
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "framing",
+    "head": {
+     "c": [
+      359.0,
+      184.3
+     ],
+     "r": [
+      109.7,
+      152.3
+     ],
+     "pivot": [
+      359.0,
+      355.0
+     ]
+    }
+   },
+   "head": {
+    "file": "talk/v22/pose_head.webp",
+    "mouth": [
+     359,
+     267
+    ],
+    "eyes": [
+     359,
+     185
+    ],
+    "scale": 1.0,
+    "score": 0.733,
+    "side": null,
+    "face": "full",
+    "headWarp": false,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      359.0,
+      184.3
+     ],
+     "r": [
+      109.7,
+      152.3
+     ],
+     "pivot": [
+      359.0,
+      355.0
+     ]
+    }
+   },
+   "mouth": {
+    "file": "talk/v22/pose_mouth.webp",
+    "mouth": [
+     359,
+     267
+    ],
+    "eyes": [
+     359,
+     185
+    ],
+    "scale": 1.0,
+    "score": 0.397,
+    "side": "R",
+    "face": "eyes",
+    "headWarp": false,
+    "v22": true,
+    "align": "framing",
+    "head": {
+     "c": [
+      359.0,
+      184.3
+     ],
+     "r": [
+      109.7,
+      152.3
+     ],
+     "pivot": [
+      359.0,
+      355.0
+     ]
+    }
+   },
+   "namaste": {
+    "file": "talk/v22/pose_namaste.webp",
+    "mouth": [
+     359,
+     267
+    ],
+    "eyes": [
+     359,
+     185
+    ],
+    "scale": 1.0,
+    "score": 0.982,
+    "side": null,
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      359.0,
+      184.3
+     ],
+     "r": [
+      109.7,
+      152.3
+     ],
+     "pivot": [
+      359.0,
+      355.0
+     ]
+    }
+   },
+   "salute": {
+    "file": "talk/v22/pose_salute.webp",
+    "mouth": [
+     359,
+     267
+    ],
+    "eyes": [
+     359,
+     185
+    ],
+    "scale": 1.0,
+    "score": 0.921,
+    "side": "L",
+    "face": "full",
+    "headWarp": false,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      359.0,
+      184.3
+     ],
+     "r": [
+      109.7,
+      152.3
+     ],
+     "pivot": [
+      359.0,
+      355.0
+     ]
+    }
+   },
+   "shh": {
+    "file": "talk/v22/pose_shh.webp",
+    "mouth": [
+     359,
+     266
+    ],
+    "eyes": [
+     359,
+     184
+    ],
+    "scale": 1.0,
+    "score": 0.751,
+    "side": "L",
+    "face": "eyes",
+    "headWarp": false,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      359.0,
+      183.3
+     ],
+     "r": [
+      109.7,
+      152.3
+     ],
+     "pivot": [
+      359.0,
+      354.0
+     ]
+    }
+   },
+   "think": {
+    "file": "talk/v22/pose_think.webp",
+    "mouth": [
+     359,
+     267
+    ],
+    "eyes": [
+     359,
+     185
+    ],
+    "scale": 1.0,
+    "score": 0.556,
+    "side": "L",
+    "face": "full",
+    "headWarp": false,
+    "v22": true,
+    "align": "framing",
+    "head": {
+     "c": [
+      359.0,
+      184.3
+     ],
+     "r": [
+      109.7,
+      152.3
+     ],
+     "pivot": [
+      359.0,
+      355.0
+     ]
+    }
    }
   },
   "seema": {
    "base": {
     "scale": 1.0,
     "hand": true,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      356.0,
+      130.2
+     ],
+     "r": [
+      74.4,
+      98.2
+     ],
+     "pivot": [
+      356.0,
+      240.2
+     ]
+    }
    },
    "wave": {
     "scale": 1.0,
     "hand": true,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      406.5,
+      144.7
+     ],
+     "r": [
+      74.4,
+      98.2
+     ],
+     "pivot": [
+      406.5,
+      254.7
+     ]
+    }
    },
    "point": {
     "scale": 1.02,
     "hand": true,
-    "side": "R"
+    "side": "R",
+    "head": {
+     "c": [
+      247.0,
+      126.4
+     ],
+     "r": [
+      75.9,
+      100.2
+     ],
+     "pivot": [
+      247.0,
+      238.6
+     ]
+    }
    },
    "open": {
     "scale": 1.03,
     "hand": true,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      366.0,
+      131.5
+     ],
+     "r": [
+      76.6,
+      101.1
+     ],
+     "pivot": [
+      366.0,
+      244.8
+     ]
+    }
    },
    "thumbs": {
     "scale": 1.05,
     "hand": true,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      365.0,
+      127.8
+     ],
+     "r": [
+      78.1,
+      103.1
+     ],
+     "pivot": [
+      365.0,
+      243.3
+     ]
+    }
    }
   },
   "solana": {
@@ -663,7 +2520,21 @@
      135
     ],
     "scale": 1.0,
-    "score": 1.0
+    "score": 1.0,
+    "head": {
+     "c": [
+      360.0,
+      121.4
+     ],
+     "r": [
+      68.2,
+      89.4
+     ],
+     "pivot": [
+      360.0,
+      221.6
+     ]
+    }
    },
    "wave": {
     "mouth": [
@@ -676,7 +2547,21 @@
     ],
     "scale": 1.0,
     "score": 0.961,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      409.0,
+      130.4
+     ],
+     "r": [
+      68.2,
+      89.4
+     ],
+     "pivot": [
+      409.0,
+      230.6
+     ]
+    }
    },
    "point": {
     "mouth": [
@@ -689,7 +2574,21 @@
     ],
     "scale": 1.0,
     "score": 0.901,
-    "side": "R"
+    "side": "R",
+    "head": {
+     "c": [
+      265.0,
+      121.4
+     ],
+     "r": [
+      68.2,
+      89.4
+     ],
+     "pivot": [
+      265.0,
+      221.6
+     ]
+    }
    },
    "open": {
     "mouth": [
@@ -702,7 +2601,21 @@
     ],
     "scale": 0.86,
     "score": 0.819,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      359.0,
+      245.2
+     ],
+     "r": [
+      58.7,
+      76.9
+     ],
+     "pivot": [
+      359.0,
+      331.3
+     ]
+    }
    },
    "thumbs": {
     "mouth": [
@@ -715,7 +2628,21 @@
     ],
     "scale": 1.0,
     "score": 0.991,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      369.0,
+      121.4
+     ],
+     "r": [
+      68.2,
+      89.4
+     ],
+     "pivot": [
+      369.0,
+      221.6
+     ]
+    }
    }
   },
   "static": {
@@ -729,7 +2656,21 @@
      244
     ],
     "scale": 1.0,
-    "score": 1.0
+    "score": 1.0,
+    "head": {
+     "c": [
+      387.5,
+      232.3
+     ],
+     "r": [
+      93.0,
+      115.3
+     ],
+     "pivot": [
+      387.5,
+      361.4
+     ]
+    }
    },
    "point": {
     "mouth": [
@@ -742,7 +2683,21 @@
     ],
     "scale": 1.02,
     "score": 0.732,
-    "side": "R"
+    "side": "R",
+    "head": {
+     "c": [
+      258.5,
+      217.0
+     ],
+     "r": [
+      94.9,
+      117.6
+     ],
+     "pivot": [
+      258.5,
+      348.7
+     ]
+    }
    },
    "open": {
     "mouth": [
@@ -755,7 +2710,21 @@
     ],
     "scale": 0.8,
     "score": 0.69,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      382.5,
+      378.7
+     ],
+     "r": [
+      74.4,
+      92.2
+     ],
+     "pivot": [
+      382.5,
+      482.0
+     ]
+    }
    },
    "thumbs": {
     "mouth": [
@@ -768,7 +2737,21 @@
     ],
     "scale": 1.0,
     "score": 0.691,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      414.5,
+      239.3
+     ],
+     "r": [
+      93.0,
+      115.3
+     ],
+     "pivot": [
+      414.5,
+      368.4
+     ]
+    }
    },
    "wave": {
     "side": "L",
@@ -779,27 +2762,449 @@
    "base": {
     "scale": 1.0,
     "hand": true,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      382.0,
+      178.2
+     ],
+     "r": [
+      105.2,
+      146.2
+     ],
+     "pivot": [
+      382.0,
+      341.9
+     ]
+    }
    },
    "wave": {
     "scale": 1.02,
     "hand": true,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      391.0,
+      186.2
+     ],
+     "r": [
+      107.3,
+      149.1
+     ],
+     "pivot": [
+      391.0,
+      353.2
+     ]
+    }
    },
    "point": {
     "scale": 1.01,
     "hand": true,
-    "side": "R"
+    "side": "R",
+    "head": {
+     "c": [
+      253.5,
+      177.7
+     ],
+     "r": [
+      106.3,
+      147.7
+     ],
+     "pivot": [
+      253.5,
+      343.0
+     ]
+    }
    },
    "open": {
     "scale": 0.96,
     "hand": true,
-    "side": null
+    "side": null,
+    "head": {
+     "c": [
+      366.0,
+      230.2
+     ],
+     "r": [
+      101.0,
+      140.4
+     ],
+     "pivot": [
+      366.0,
+      387.4
+     ]
+    }
    },
    "thumbs": {
     "scale": 0.98,
     "hand": true,
-    "side": "L"
+    "side": "L",
+    "head": {
+     "c": [
+      363.5,
+      195.2
+     ],
+     "r": [
+      103.1,
+      143.3
+     ],
+     "pivot": [
+      363.5,
+      355.6
+     ]
+    }
+   },
+   "wave2": {
+    "file": "talk/v22/pose_wave2.webp",
+    "mouth": [
+     392,
+     273
+    ],
+    "eyes": [
+     390,
+     202
+    ],
+    "scale": 1.02,
+    "score": 0.662,
+    "side": "L",
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "framing",
+    "head": {
+     "c": [
+      391.0,
+      186.2
+     ],
+     "r": [
+      107.3,
+      149.1
+     ],
+     "pivot": [
+      391.0,
+      353.2
+     ]
+    }
+   },
+   "clap": {
+    "file": "talk/v22/pose_clap.webp",
+    "mouth": [
+     377,
+     263
+    ],
+    "eyes": [
+     387,
+     192
+    ],
+    "scale": 1.0,
+    "score": 0.929,
+    "side": null,
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      382.0,
+      177.2
+     ],
+     "r": [
+      105.2,
+      146.2
+     ],
+     "pivot": [
+      382.0,
+      340.9
+     ]
+    }
+   },
+   "cover": {
+    "file": "talk/v22/pose_cover.webp",
+    "mouth": [
+     377,
+     264
+    ],
+    "eyes": [
+     387,
+     193
+    ],
+    "scale": 1.0,
+    "score": 0.494,
+    "side": null,
+    "face": "none",
+    "headWarp": false,
+    "v22": true,
+    "align": "framing",
+    "head": {
+     "c": [
+      382.0,
+      178.2
+     ],
+     "r": [
+      105.2,
+      146.2
+     ],
+     "pivot": [
+      382.0,
+      341.9
+     ]
+    }
+   },
+   "facepalm": {
+    "file": "talk/v22/pose_facepalm.webp",
+    "mouth": [
+     377,
+     264
+    ],
+    "eyes": [
+     387,
+     193
+    ],
+    "scale": 1.0,
+    "score": 0.47,
+    "side": "L",
+    "face": "mouth",
+    "headWarp": false,
+    "v22": true,
+    "align": "framing",
+    "head": {
+     "c": [
+      382.0,
+      178.2
+     ],
+     "r": [
+      105.2,
+      146.2
+     ],
+     "pivot": [
+      382.0,
+      341.9
+     ]
+    }
+   },
+   "fist": {
+    "file": "talk/v22/pose_fist.webp",
+    "mouth": [
+     377,
+     264
+    ],
+    "eyes": [
+     387,
+     193
+    ],
+    "scale": 1.0,
+    "score": 0.941,
+    "side": "L",
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      382.0,
+      178.2
+     ],
+     "r": [
+      105.2,
+      146.2
+     ],
+     "pivot": [
+      382.0,
+      341.9
+     ]
+    }
+   },
+   "head": {
+    "file": "talk/v22/pose_head.webp",
+    "mouth": [
+     377,
+     264
+    ],
+    "eyes": [
+     387,
+     193
+    ],
+    "scale": 1.0,
+    "score": 0.851,
+    "side": null,
+    "face": "full",
+    "headWarp": false,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      382.0,
+      178.2
+     ],
+     "r": [
+      105.2,
+      146.2
+     ],
+     "pivot": [
+      382.0,
+      341.9
+     ]
+    }
+   },
+   "mouth": {
+    "file": "talk/v22/pose_mouth.webp",
+    "mouth": [
+     378,
+     262
+    ],
+    "eyes": [
+     388,
+     190
+    ],
+    "scale": 1.02,
+    "score": 0.72,
+    "side": "L",
+    "face": "eyes",
+    "headWarp": false,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      383.0,
+      174.7
+     ],
+     "r": [
+      107.3,
+      149.1
+     ],
+     "pivot": [
+      383.0,
+      341.7
+     ]
+    }
+   },
+   "namaste": {
+    "file": "talk/v22/pose_namaste.webp",
+    "mouth": [
+     377,
+     264
+    ],
+    "eyes": [
+     387,
+     193
+    ],
+    "scale": 1.0,
+    "score": 0.982,
+    "side": null,
+    "face": "full",
+    "headWarp": true,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      382.0,
+      178.2
+     ],
+     "r": [
+      105.2,
+      146.2
+     ],
+     "pivot": [
+      382.0,
+      341.9
+     ]
+    }
+   },
+   "salute": {
+    "file": "talk/v22/pose_salute.webp",
+    "mouth": [
+     392,
+     266
+    ],
+    "eyes": [
+     402,
+     195
+    ],
+    "scale": 1.0,
+    "score": 0.79,
+    "side": "L",
+    "face": "full",
+    "headWarp": false,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      397.0,
+      180.2
+     ],
+     "r": [
+      105.2,
+      146.2
+     ],
+     "pivot": [
+      397.0,
+      343.9
+     ]
+    }
+   },
+   "shh": {
+    "file": "talk/v22/pose_shh.webp",
+    "mouth": [
+     377,
+     264
+    ],
+    "eyes": [
+     387,
+     193
+    ],
+    "scale": 1.0,
+    "score": 0.935,
+    "side": "L",
+    "face": "eyes",
+    "headWarp": false,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      382.0,
+      178.2
+     ],
+     "r": [
+      105.2,
+      146.2
+     ],
+     "pivot": [
+      382.0,
+      341.9
+     ]
+    }
+   },
+   "think": {
+    "file": "talk/v22/pose_think.webp",
+    "mouth": [
+     377,
+     262
+    ],
+    "eyes": [
+     387,
+     191
+    ],
+    "scale": 1.0,
+    "score": 0.725,
+    "side": "L",
+    "face": "full",
+    "headWarp": false,
+    "v22": true,
+    "align": "ncc",
+    "head": {
+     "c": [
+      382.0,
+      176.2
+     ],
+     "r": [
+      105.2,
+      146.2
+     ],
+     "pivot": [
+      382.0,
+      339.9
+     ]
+    }
    }
   }
  }
