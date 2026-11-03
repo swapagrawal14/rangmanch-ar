@@ -1,10 +1,13 @@
 'use strict';
-/* Rangmanch AR — one-person cartoon studio.
-   v0.4 "You Become the Character": the lead Rigpop character is cut into a live
-   puppet at load (its arms lifted out of the art as feathered bone-strips, the
-   gaps filled) and re-posed bone-by-bone from your MediaPipe skeleton every
-   frame. Your hands conduct full-size co-actors standing on the stage floor.
-   Face blendshapes drive blink + A/O/E mouth tiles. Everything on-device. */
+/* Rangmanch AR v1.0 — one-person cartoon studio.
+   You stand in front of the camera and are completely replaced by a Rigpop
+   character: at cast time the app estimates the character's skeleton from its
+   own face geometry (the same math as Rigpop Forge's WowKit exporter), cuts
+   its arms and head out of the artwork as feathered pieces, fills the holes,
+   and then re-poses the puppet from your MediaPipe skeleton every frame.
+   Your gaze turns its head; your mouth and blinks drive its face tiles.
+   Your room is only ever shown as blurred colour — you are never on screen.
+   Everything runs on-device. */
 
 const $ = s => document.querySelector(s);
 const stage = $('#stage'), ctx = stage.getContext('2d');
@@ -18,6 +21,7 @@ const statusModel = $('#status-model'), dotPose = $('#dot-pose'), dotHand = $('#
 const WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
 const MODEL = 'https://storage.googleapis.com/mediapipe-models';
 const PACKS_BASE = 'assets/packs/';
+const VERSION = '1.0.0';
 
 /* ---------- cast ---------- */
 const CAST = [
@@ -27,37 +31,43 @@ const CAST = [
   ['bubbles', 'Bubbles'], ['luna', 'Luna'], ['puni', 'Puni'], ['static', 'Static'],
   ['doodle-swapnil', 'Doodle Swapnil']
 ];
-/* Packs whose art is a full-body humanoid the puppet-rig template fits.
-   The rest play as anchored figures (and shine as hand co-actors). */
+/* Full-body humanoid packs get the live puppet rig. The rest play as anchored
+   figures (and shine as co-actors). */
 const RIG_PACKS = new Set(['swapnil', 'doodle-swapnil', 'sanjay', 'seema', 'bhavishy',
   'solana', 'rafi', 'kiko', 'mira', 'bubbles', 'luna', 'static']);
 
-const packs = {};   // id -> {manifest, img, tiles, anchors, rig}
+const packs = {};   // id -> {manifest, img, tiles, face, rig, rigPromise}
 const cast = { lead: 'swapnil', leftHand: 'mocha', rightHand: 'bunty' };
 
 function loadImage(src) {
   return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
 }
+/* Forge pack format (character.rigpop.json): talk.base is a path, talk.files
+   holds {A,O,E,blink} tile paths, talk.patches holds {key:{x,y,w,h}} rects,
+   talk.poseAnchors holds hand-measured centres where available. */
 async function ensurePack(id) {
   if (packs[id]) return packs[id];
   const base = PACKS_BASE + id + '/';
   const manifest = await (await fetch(base + 'character.rigpop.json')).json();
   const talk = manifest.talk || {};
   const img = {};
-  const poses = Object.keys(talk.assets || { base: 1 });
-  await Promise.all(poses.map(async p => {
-    try { img[p] = await loadImage(base + 'talk/' + p + '.png'); } catch (e) { /* pose missing */ }
-  }));
+  if (talk.base) { try { img.base = await loadImage(base + talk.base); } catch (e) { /* missing */ } }
   const tiles = {};
-  for (const t of ['mouthA', 'mouthO', 'mouthE', 'blink']) {
-    if (talk.patches && talk.patches[t]) { try { tiles[t] = await loadImage(base + 'talk/' + t + '.png'); } catch (e) { /* none */ } }
+  const files = talk.files || {};
+  for (const key of ['A', 'O', 'E', 'blink']) {
+    if (files[key]) { try { tiles[key] = await loadImage(base + files[key]); } catch (e) { /* none */ } }
   }
-  packs[id] = { manifest, img, tiles, anchors: talk.poseAnchors || null, rig: null, rigFailed: false };
+  const patches = talk.patches || {}, anchBase = (talk.poseAnchors || {}).base || null;
+  const centre = p => p ? [p.x + p.w / 2, p.y + p.h / 2] : null;
+  const face = {};
+  for (const key of ['A', 'O', 'E']) if (patches[key]) face[key] = { c: (anchBase && anchBase.mouth) || centre(patches[key]), w: patches[key].w };
+  if (patches.blink) face.blink = { c: (anchBase && anchBase.eyes) || centre(patches.blink), w: patches.blink.w };
+  packs[id] = { manifest, img, tiles, face, rig: null, rigPromise: null, rigFailed: false };
   return packs[id];
 }
 function updateThumb(role, id) {
-  const p = packs[id], th = document.querySelector('#thumb-' + role);
-  if (th && p && p.manifest.talk && p.manifest.talk.thumb) th.src = PACKS_BASE + id + '/' + p.manifest.talk.thumb;
+  const th = document.querySelector('#thumb-' + role);
+  if (th) th.src = PACKS_BASE + id + '/talk/base.png'; // every pack ships its base art
 }
 async function fillCastSelects() {
   for (const sel of [selLead, selLeft, selRight]) {
@@ -67,130 +77,198 @@ async function fillCastSelects() {
   selLead.value = cast.lead; selLeft.value = cast.leftHand; selRight.value = cast.rightHand;
   for (const [id] of CAST) { try { await ensurePack(id); } catch (e) { /* offline pack */ } }
   updateThumb('body', cast.lead); updateThumb('left', cast.leftHand); updateThumb('right', cast.rightHand);
+  const lead = packs[cast.lead];
+  if (lead && RIG_PACKS.has(cast.lead)) buildRigAsync(lead);
 }
-selLead.addEventListener('change', async () => { cast.lead = selLead.value; await ensurePack(cast.lead); updateThumb('body', cast.lead); });
+selLead.addEventListener('change', async () => {
+  cast.lead = selLead.value;
+  const p = await ensurePack(cast.lead); updateThumb('body', cast.lead);
+  if (RIG_PACKS.has(cast.lead)) buildRigAsync(p);
+});
 selLeft.addEventListener('change', async () => { cast.leftHand = selLeft.value; await ensurePack(cast.leftHand); updateThumb('left', cast.leftHand); });
 selRight.addEventListener('change', async () => { cast.rightHand = selRight.value; await ensurePack(cast.rightHand); updateThumb('right', cast.rightHand); });
 
-/* ---------- puppet rig: cut the lead's arms out of its own art ----------
-   Template measured on the reference pack (720x936, via visual grounding).
-   Arms become feathered strips around the arm bones; the holes are filled by
-   smearing neighbouring hair/dress pixels, so arms can move with no ghost. */
-const RIG_T = { // fractions of image w/h
-  shoR: [243 / 720, 400 / 936], elbR: [210 / 720, 604 / 936], wriR: [176 / 720, 772 / 936],
-  shoL: [502 / 720, 400 / 936], elbL: [538 / 720, 604 / 936], wriL: [578 / 720, 772 / 936],
-  hip: [368 / 720, 646 / 936]
-};
-const RIG_SEG_BOX = { // strip crop boxes [x0,y0,x1,y1] in fractions
-  Rup: [100 / 720, 356 / 936, 330 / 720, 640 / 936], Rlo: [72 / 720, 560 / 936, 316 / 720, 836 / 936],
-  Lup: [416 / 720, 356 / 936, 646 / 720, 640 / 936], Llo: [434 / 720, 560 / 936, 674 / 720, 836 / 936]
-};
-const RIG_BONES = { Rup: ['shoR', 'elbR'], Rlo: ['elbR', 'wriR'], Lup: ['shoL', 'elbL'], Llo: ['elbL', 'wriL'] };
-function distSeg(px, py, a, b) {
-  const vx = b[0] - a[0], vy = b[1] - a[1], L2 = vx * vx + vy * vy || 1;
-  let t = ((px - a[0]) * vx + (py - a[1]) * vy) / L2; t = Math.max(0, Math.min(1, t));
-  const dx = px - (a[0] + t * vx), dy = py - (a[1] + t * vy);
-  return Math.hypot(dx, dy);
+/* ---------- skeleton estimation (Forge WowKit math, from face geometry) ---------- */
+function estimateJoints(manifest, bbox, W, H) {
+  const patches = (manifest.talk || {}).patches || {};
+  const blink = patches.blink, mouth = patches.A;
+  if (!blink || !mouth || !bbox) return null;
+  const top = bbox.y, bottom = bbox.y + bbox.h;
+  const faceCx = blink.x + blink.w / 2;
+  const eyeY = blink.y + blink.h / 2;
+  const mouthY = mouth.y + mouth.h / 2;
+  const faceW = blink.w * 1.55;
+  const headTopEst = Math.max(top, eyeY - faceW * 0.52);
+  const chin = mouthY + faceW * 0.30;
+  const headH = Math.max(24, chin - headTopEst);
+  const neckY = chin + headH * 0.06;
+  const shoulderY = neckY + headH * 0.24;
+  const shoulderHalf = faceW * 0.60;
+  const hipY = top + (bottom - top) * 0.54;
+  const elbowDY = headH * 0.92, handDY = headH * 0.88;
+  return {
+    faceCx, faceW, headH, chin, eyeY,
+    neck: [faceCx, neckY], hip: [faceCx, hipY],
+    shoR: [faceCx - shoulderHalf, shoulderY], elbR: [faceCx - shoulderHalf * 1.12, shoulderY + elbowDY], wriR: [faceCx - shoulderHalf * 1.18, shoulderY + elbowDY + handDY],
+    shoL: [faceCx + shoulderHalf, shoulderY], elbL: [faceCx + shoulderHalf * 1.12, shoulderY + elbowDY], wriL: [faceCx + shoulderHalf * 1.18, shoulderY + elbowDY + handDY],
+    shoulderDist: shoulderHalf * 2,
+    headPivot: [faceCx, chin - headH * 0.04],
+    headBox: [Math.max(0, faceCx - faceW * 1.18), Math.max(0, top - 4), Math.min(W, faceCx + faceW * 1.18), Math.min(H, chin + headH * 0.38)],
+    ellipse: [faceCx, eyeY + headH * 0.18, faceW * 0.48, headH * 0.53]
+  };
 }
-function buildRig(pack) {
-  if (pack.rig || pack.rigFailed) return pack.rig;
-  const img = pack.img.base;
-  if (!img) { pack.rigFailed = true; return null; }
-  try {
-    const W = img.naturalWidth, H = img.naturalHeight, sx = W / 720, sy = H / 936;
-    const J = {}; for (const k in RIG_T) J[k] = [RIG_T[k][0] * W, RIG_T[k][1] * H];
-    const base = document.createElement('canvas'); base.width = W; base.height = H;
-    const bctx = base.getContext('2d', { willReadFrequently: true });
-    bctx.drawImage(img, 0, 0);
-    const data = bctx.getImageData(0, 0, W, H).data;
-    const R = 34 * sx, F = 10 * sx;
-    const arms = [
-      { segs: [[J.shoR, J.elbR], [J.elbR, J.wriR]], shift: -46 * sx },
-      { segs: [[J.shoL, J.elbL], [J.elbL, J.wriL]], shift: 46 * sx }
-    ];
-    const out = new ImageData(W, H); out.data.set(data);
-    const od = out.data;
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      let hit = null;
+function distSeg2(px, py, a, b) {
+  const vx = b[0] - a[0], vy = b[1] - a[1], L2 = vx * vx + vy * vy || 1;
+  let t = ((px - a[0]) * vx + (py - a[1]) * vy) / L2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const dx = px - (a[0] + t * vx), dy = py - (a[1] + t * vy);
+  return dx * dx + dy * dy;
+}
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+/* Cut the puppet out of the pack's own base art. Region-limited pixel passes
+   keep this fast; it runs chunked so the page never freezes. */
+async function buildRigAsync(pack) {
+  if (pack.rig || pack.rigPromise || pack.rigFailed) return pack.rig;
+  pack.rigPromise = (async () => {
+    const img = pack.img.base;
+    if (!img) { pack.rigFailed = true; return null; }
+    try {
+      const W = img.naturalWidth, H = img.naturalHeight;
+      const base = document.createElement('canvas'); base.width = W; base.height = H;
+      const bctx = base.getContext('2d', { willReadFrequently: true });
+      bctx.drawImage(img, 0, 0);
+      const src = bctx.getImageData(0, 0, W, H), data = src.data;
+      // tight bbox of the drawing
+      let bx0 = W, by0 = H, bx1 = -1, by1 = -1;
+      for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) {
+        if (data[(y * W + x) * 4 + 3] > 30) { if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; }
+      }
+      if (bx1 < 0) { pack.rigFailed = true; return null; }
+      const bbox = { x: bx0, y: by0, w: bx1 - bx0, h: by1 - by0 };
+      const J = estimateJoints(pack.manifest, bbox, W, H);
+      if (!J) { pack.rigFailed = true; return null; }
+      const R = Math.max(16, J.faceW * 0.157), F = Math.max(5, R * 0.3), R2 = (R + 2) * (R + 2);
+      const out = new ImageData(W, H); out.data.set(data);
+      const od = out.data;
+      const arms = [
+        { segs: [[J.shoR, J.elbR], [J.elbR, J.wriR]], shift: -R * 1.35 },
+        { segs: [[J.shoL, J.elbL], [J.elbL, J.wriL]], shift: R * 1.35 }
+      ];
+      // pass 1: erase the arms (smear neighbouring pixels over them)
       for (const a of arms) {
-        const d = Math.min(distSeg(x, y, a.segs[0][0], a.segs[0][1]), distSeg(x, y, a.segs[1][0], a.segs[1][1]));
-        if (d <= R + 2) { hit = a; break; }
+        const xs = a.segs.flatMap(s => [s[0][0], s[1][0]]), ys = a.segs.flatMap(s => [s[0][1], s[1][1]]);
+        const x0 = Math.max(0, Math.floor(Math.min(...xs) - R - 4)), x1 = Math.min(W - 1, Math.ceil(Math.max(...xs) + R + 4));
+        const y0 = Math.max(0, Math.floor(Math.min(...ys) - R - 4)), y1 = Math.min(H - 1, Math.ceil(Math.max(...ys) + R + 4));
+        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+          const d2 = Math.min(distSeg2(x, y, a.segs[0][0], a.segs[0][1]), distSeg2(x, y, a.segs[1][0], a.segs[1][1]));
+          if (d2 > R2) continue;
+          const i = (y * W + x) * 4;
+          const sxp = Math.max(0, Math.min(W - 1, Math.round(x + a.shift)));
+          let j = (y * W + sxp) * 4;
+          if (data[j + 3] < 40) { const syp = Math.max(0, y - Math.round(J.headH * 0.68)); j = (syp * W + sxp) * 4; }
+          od[i] = data[j]; od[i + 1] = data[j + 1]; od[i + 2] = data[j + 2]; od[i + 3] = data[j + 3];
+        }
+        await tick();
       }
-      if (!hit) continue;
-      const i = (y * W + x) * 4;
-      const sxp = Math.max(0, Math.min(W - 1, Math.round(x + hit.shift)));
-      let j = (y * W + sxp) * 4;
-      if (data[j + 3] < 40) { const syp = Math.max(0, y - Math.round(170 * sy)); j = (syp * W + sxp) * 4; } // hair falls from above
-      od[i] = data[j]; od[i + 1] = data[j + 1]; od[i + 2] = data[j + 2]; od[i + 3] = data[j + 3];
-    }
-    // head erase: only skin/face tones are repainted (with hair sampled sideways),
-    // so when the head piece turns, hair shows behind the face — no streaks, no halo.
-    const NL = Math.round(351 * sy), FH = Math.round(14 * sy);
-    const snap = new Uint8ClampedArray(od);
-    const cxImg = Math.round(372 * sx);
-    for (let y = 0; y < Math.min(H, NL + FH); y++) {
-      const f = Math.max(0, Math.min(1, (NL + FH - y) / (2 * FH)));
-      if (f <= 0.02) continue;
-      for (let x = 0; x < W; x++) {
-        const i = (y * W + x) * 4;
-        if (snap[i + 3] < 30) continue;
-        const r = snap[i], b = snap[i + 2];
-        if (!(r > 120 && r > b + 18)) continue; // hair, dress, outlines stay untouched
-        const dir = x < cxImg ? -1 : 1;
-        let sxp = Math.max(0, Math.min(W - 1, x + dir * Math.round(70 * sx)));
-        let j = (y * W + sxp) * 4;
-        if (snap[j + 3] < 30) { sxp = Math.max(0, Math.min(W - 1, x - dir * Math.round(70 * sx))); j = (y * W + sxp) * 4; }
-        const sr = snap[j + 3] < 30 ? 58 : snap[j], sg = snap[j + 3] < 30 ? 44 : snap[j + 1], sb = snap[j + 3] < 30 ? 40 : snap[j + 2];
-        od[i] = Math.round(sr * f + snap[i] * (1 - f));
-        od[i + 1] = Math.round(sg * f + snap[i + 1] * (1 - f));
-        od[i + 2] = Math.round(sb * f + snap[i + 2] * (1 - f));
-        od[i + 3] = Math.max(snap[i + 3], Math.round((snap[j + 3] < 30 ? 255 : snap[j + 3]) * f));
+      // pass 2: erase the face ellipse completely (no ghost features under the head)
+      {
+        const [ecx, ecy, erx, ery] = J.ellipse;
+        const snapE = new Uint8ClampedArray(od);
+        const x0 = Math.max(0, Math.floor(ecx - erx * 1.15)), x1 = Math.min(W - 1, Math.ceil(ecx + erx * 1.15));
+        const y0 = Math.max(0, Math.floor(ecy - ery * 1.15)), y1 = Math.min(H - 1, Math.ceil(ecy + ery * 1.15));
+        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+          const dE = Math.hypot((x - ecx) / erx, (y - ecy) / ery);
+          if (dE >= 1.10) continue;
+          const i = (y * W + x) * 4;
+          if (snapE[i + 3] < 30) continue;
+          const f = Math.max(0, Math.min(1, (1.10 - dE) / 0.18)), dir = x < ecx ? -1 : 1;
+          let sxp = Math.max(0, Math.min(W - 1, Math.round(x + dir * erx * 1.3))), j = (y * W + sxp) * 4;
+          if (snapE[j + 3] < 30) { sxp = Math.max(0, Math.min(W - 1, Math.round(x - dir * erx * 1.3))); j = (y * W + sxp) * 4; }
+          const has = snapE[j + 3] >= 30;
+          od[i] = Math.round((has ? snapE[j] : 58) * f + snapE[i] * (1 - f));
+          od[i + 1] = Math.round((has ? snapE[j + 1] : 44) * f + snapE[i + 1] * (1 - f));
+          od[i + 2] = Math.round((has ? snapE[j + 2] : 40) * f + snapE[i + 2] * (1 - f));
+        }
+        await tick();
       }
-    }
-    const erased = document.createElement('canvas'); erased.width = W; erased.height = H;
-    erased.getContext('2d').putImageData(out, 0, 0);
-    // head piece: everything above the neck line, feathered at the junction
-    const headBox = [120 / 720 * W, 0, 630 / 720 * W, 392 / 936 * H];
-    const hw = Math.round(headBox[2] - headBox[0]), hh = Math.round(headBox[3] - headBox[1]);
-    const headC = document.createElement('canvas'); headC.width = hw; headC.height = hh;
-    const hctx = headC.getContext('2d', { willReadFrequently: true });
-    hctx.drawImage(img, -headBox[0], -headBox[1]);
-    const hid = hctx.getImageData(0, 0, hw, hh), hd = hid.data;
-    for (let y = 0; y < hh; y++) {
-      const gy = y + headBox[1];
-      const f = Math.max(0, Math.min(1, (NL + FH - gy) / (2 * FH)));
-      if (f >= 0.999) continue;
-      for (let x = 0; x < hw; x++) { const i = (y * hw + x) * 4 + 3; hd[i] = Math.round(hd[i] * f); }
-    }
-    hctx.putImageData(hid, 0, 0);
-    const head = { img: headC, box: headBox, pivot: [372 / 720 * W, 338 / 936 * H] };
-    const strips = {};
-    for (const name of Object.keys(RIG_BONES)) {
-      const [fk, tk] = RIG_BONES[name], a = J[fk], b = J[tk], bf = RIG_SEG_BOX[name];
-      const box = [bf[0] * W, bf[1] * H, bf[2] * W, bf[3] * H];
-      const cw = Math.round(box[2] - box[0]), ch = Math.round(box[3] - box[1]);
-      const c = document.createElement('canvas'); c.width = cw; c.height = ch;
-      const cctx = c.getContext('2d', { willReadFrequently: true });
-      cctx.drawImage(img, -box[0], -box[1]);
-      const idd = cctx.getImageData(0, 0, cw, ch), dd = idd.data;
-      for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
-        const d = distSeg(x + box[0], y + box[1], a, b);
-        const f = Math.max(0, Math.min(1, (R + F - d) / (2 * F)));
-        dd[(y * cw + x) * 4 + 3] = Math.round(dd[(y * cw + x) * 4 + 3] * f);
+      // pass 3: erase remaining skin tones in the head band (jaw/neck remnants)
+      {
+        const NL = J.neck[1], FH = Math.max(8, J.headH * 0.06);
+        const snap = new Uint8ClampedArray(od);
+        const x0 = Math.max(0, Math.floor(J.headBox[0])), x1 = Math.min(W - 1, Math.ceil(J.headBox[2]));
+        const y1 = Math.min(H - 1, Math.ceil(NL + FH));
+        for (let y = 0; y <= y1; y++) {
+          const f = Math.max(0, Math.min(1, (NL + FH - y) / (2 * FH)));
+          if (f <= 0.02) continue;
+          for (let x = x0; x <= x1; x++) {
+            const i = (y * W + x) * 4;
+            if (snap[i + 3] < 30) continue;
+            if (!(snap[i] > 120 && snap[i] > snap[i + 2] + 18)) continue;
+            const dir = x < J.faceCx ? -1 : 1;
+            let sxp = Math.max(0, Math.min(W - 1, Math.round(x + dir * J.faceW * 0.32))), j = (y * W + sxp) * 4;
+            if (snap[j + 3] < 30) { sxp = Math.max(0, Math.min(W - 1, Math.round(x - dir * J.faceW * 0.32))); j = (y * W + sxp) * 4; }
+            const has = snap[j + 3] >= 30;
+            od[i] = Math.round((has ? snap[j] : 58) * f + snap[i] * (1 - f));
+            od[i + 1] = Math.round((has ? snap[j + 1] : 44) * f + snap[i + 1] * (1 - f));
+            od[i + 2] = Math.round((has ? snap[j + 2] : 40) * f + snap[i + 2] * (1 - f));
+            od[i + 3] = Math.max(snap[i + 3], Math.round((has ? snap[j + 3] : 255) * f));
+          }
+        }
+        await tick();
       }
-      cctx.putImageData(idd, 0, 0);
-      strips[name] = { img: c, box, from: a, to: b };
-    }
-    pack.rig = { erased, strips, head, J, W, H };
-    return pack.rig;
-  } catch (e) { pack.rigFailed = true; return null; }
+      const erased = document.createElement('canvas'); erased.width = W; erased.height = H;
+      erased.getContext('2d').putImageData(out, 0, 0);
+      // head piece: art above the neck line, feathered at the junction
+      const NL = J.neck[1], FH = Math.max(8, J.headH * 0.06), hb = J.headBox;
+      const hw = Math.round(hb[2] - hb[0]), hh = Math.round(hb[3] - hb[1]);
+      const headC = document.createElement('canvas'); headC.width = hw; headC.height = hh;
+      const hctx = headC.getContext('2d', { willReadFrequently: true });
+      hctx.drawImage(img, -hb[0], -hb[1]);
+      const hid = hctx.getImageData(0, 0, hw, hh), hd = hid.data;
+      for (let y = 0; y < hh; y++) {
+        const f = Math.max(0, Math.min(1, (NL + FH - (y + hb[1])) / (2 * FH)));
+        if (f >= 0.999) continue;
+        for (let x = 0; x < hw; x++) { const i = (y * hw + x) * 4 + 3; hd[i] = Math.round(hd[i] * f); }
+      }
+      hctx.putImageData(hid, 0, 0);
+      const head = { img: headC, box: hb, pivot: J.headPivot };
+      await tick();
+      // arm strips: feathered masks around each bone
+      const strips = {};
+      const segDefs = [['Rup', J.shoR, J.elbR], ['Rlo', J.elbR, J.wriR], ['Lup', J.shoL, J.elbL], ['Llo', J.elbL, J.wriL]];
+      for (const [name, a, b] of segDefs) {
+        const box = [
+          Math.max(0, Math.min(a[0], b[0]) - R - 14), Math.max(0, Math.min(a[1], b[1]) - R - 14),
+          Math.min(W, Math.max(a[0], b[0]) + R + 14), Math.min(H, Math.max(a[1], b[1]) + R + 14)
+        ];
+        const cw = Math.round(box[2] - box[0]), ch = Math.round(box[3] - box[1]);
+        const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+        const cctx = c.getContext('2d', { willReadFrequently: true });
+        cctx.drawImage(img, -box[0], -box[1]);
+        const idd = cctx.getImageData(0, 0, cw, ch), dd = idd.data;
+        const Rr = R + F;
+        for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+          const d = Math.sqrt(distSeg2(x + box[0], y + box[1], a, b));
+          const f = Math.max(0, Math.min(1, (Rr - d) / (2 * F)));
+          if (f < 0.999) { const i = (y * cw + x) * 4 + 3; dd[i] = Math.round(dd[i] * f); }
+        }
+        cctx.putImageData(idd, 0, 0);
+        strips[name] = { img: c, box, from: a, to: b };
+        await tick();
+      }
+      pack.rig = { erased, strips, head, J, W, H, bbox };
+      return pack.rig;
+    } catch (e) { pack.rigFailed = true; return null; }
+  })();
+  return pack.rigPromise;
 }
 
 /* ---------- state ---------- */
 const state = {
   mode: 'idle', pose: null, face: null, hands: [],
   recording: false, chunks: [], recorder: null, stream: null,
-  recUrl: null, recStart: 0, quality: 'high', reel: false,
+  recUrl: null, recStart: 0, quality: 'high', reel: false, bg: null,
+  hpS: { yaw: 0, pitch: 0, roll: 0 }, msgAt: 0, autoBalanced: false, lowFpsSince: 0,
   actors: { left: { p: 0, x: 0, talk: 0, talkT: 0, last: 0, tx: 0 }, right: { p: 0, x: 0, talk: 0, talkT: 0, last: 0, tx: 0 } }
 };
 const raw = { pose: null, face: null, hands: [] };
@@ -198,10 +276,12 @@ const raw = { pose: null, face: null, hands: [] };
 function smoothLm(prev, next, a) {
   if (!next) return prev;
   if (!prev || prev.length !== next.length) return next.map(p => ({ ...p }));
-  return next.map((p, i) => ({
-    x: prev[i].x + (p.x - prev[i].x) * a, y: prev[i].y + (p.y - prev[i].y) * a,
-    z: (prev[i].z || 0) + ((p.z || 0) - (prev[i].z || 0)) * a, visibility: p.visibility
-  }));
+  const out = new Array(next.length);
+  for (let i = 0; i < next.length; i++) {
+    const p = next[i], q = prev[i];
+    out[i] = { x: q.x + (p.x - q.x) * a, y: q.y + (p.y - q.y) * a, z: (q.z || 0) + ((p.z || 0) - (q.z || 0)) * a, visibility: p.visibility };
+  }
+  return out;
 }
 function smoothAll(alpha) {
   state.pose = smoothLm(state.pose, raw.pose, alpha);
@@ -215,7 +295,7 @@ function smoothAll(alpha) {
 /* ---------- MediaPipe ---------- */
 let poseL = null, handL = null, faceL = null, lastVideoTime = -1, frameNo = 0;
 async function initModels() {
-  setMsg('Loading the stage crew (MediaPipe models)…');
+  statusModel.textContent = 'Models: loading…';
   const { FilesetResolver, PoseLandmarker, HandLandmarker, FaceLandmarker } =
     await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
   const vision = await FilesetResolver.forVisionTasks(WASM);
@@ -226,20 +306,24 @@ async function initModels() {
   poseL = await mk(PoseLandmarker, 'pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task');
   handL = await mk(HandLandmarker, 'hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task');
   faceL = await mk(FaceLandmarker, 'face_landmarker/face_landmarker/float16/1/face_landmarker.task', { outputFaceBlendshapes: true });
+  statusModel.textContent = 'Models: ready ✅';
 }
+/* Pose runs every frame (it carries the body). Face and hands alternate on
+   even/odd frames — they read perfectly at half rate and the stage stays
+   smooth on phone GPUs. 'High' quality runs everything every frame. */
 async function infer() {
   if (!poseL || cam.readyState < 2 || cam.currentTime === lastVideoTime) return;
   lastVideoTime = cam.currentTime; frameNo++;
   const t = performance.now();
-  const skip = state.quality === 'balanced' ? 2 : 1;
+  const high = state.quality === 'high';
   try {
     const pr = poseL.detectForVideo(cam, t);
     raw.pose = pr.landmarks && pr.landmarks[0] ? pr.landmarks[0] : null;
-    if (frameNo % skip === 0) {
+    if (high || frameNo % 2 === 0) {
       const hr = handL.detectForVideo(cam, t);
       raw.hands = hr.landmarks || [];
     }
-    if (frameNo % skip === 0) {
+    if (high || frameNo % 2 === 1) {
       const fr = faceL.detectForVideo(cam, t);
       if (fr.faceLandmarks && fr.faceLandmarks[0]) {
         const cats = {};
@@ -274,11 +358,15 @@ function synthDemo(t) {
   raw.hands = [hand];
   const cats = { eyeBlinkLeft: (Math.sin(s * 0.9) > 0.97) ? 0.9 : 0.02, eyeBlinkRight: 0.02, jawOpen: Math.max(0, Math.sin(s * 2.4)) * 0.55, mouthSmileLeft: 0.3, mouthSmileRight: 0.3, mouthFunnel: 0 };
   const fl = []; for (let i = 0; i < 468; i++) fl.push({ x: 0.5, y: 0.3, z: 0 });
+  // a face that slowly looks left, then right — shows off the gaze tracking
+  const yawA = Math.sin(s * 0.45) * 0.035;
+  fl[1] = { x: 0.5 + yawA, y: 0.315, z: 0 };
+  fl[33] = { x: 0.465, y: 0.30, z: 0 }; fl[263] = { x: 0.535, y: 0.30, z: 0 };
   raw.face = { landmarks: fl, cats };
 }
 
 /* ---------- stage helpers ---------- */
-function setMsg(t) { msgEl.textContent = t || ''; }
+function setMsg(t) { msgEl.textContent = t || ''; msgEl.style.opacity = t ? '1' : '0'; state.msgAt = performance.now(); }
 function toPx(p) { return { x: (1 - p.x) * stage.width, y: p.y * stage.height }; }
 function mid(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
 function faceState() {
@@ -286,29 +374,23 @@ function faceState() {
   const blink = ((c.eyeBlinkLeft || 0) + (c.eyeBlinkRight || 0)) / 2 > 0.5;
   const smile = ((c.mouthSmileLeft || 0) + (c.mouthSmileRight || 0)) / 2, jaw = c.jawOpen || 0;
   let mouth = null;
-  if (jaw > 0.22) mouth = 'mouthA';
-  else if ((c.mouthFunnel || 0) > 0.3) mouth = 'mouthO';
-  else if (smile > 0.34) mouth = 'mouthE';
-  const wide = smile > 0.45 && jaw > 0.1; // laughing: big grin wins over a plain A
-  if (wide) mouth = 'mouthE';
+  if (jaw > 0.22) mouth = 'A';
+  else if ((c.mouthFunnel || 0) > 0.3) mouth = 'O';
+  else if (smile > 0.34) mouth = 'E';
+  const wide = smile > 0.45 && jaw > 0.1; // laughing: the big grin wins
+  if (wide) mouth = 'E';
   return { blink, mouth, wide };
 }
-function headPose() {
+function headPoseRaw() {
   const fl = state.face && state.face.landmarks;
-  if (!fl || !fl[1] || !fl[33] || !fl[263]) return { yaw: 0, pitch: 0, roll: 0 };
+  if (!fl || !fl[1] || !fl[33] || !fl[263]) return null;
   const nose = toPx(fl[1]), eR = toPx(fl[33]), eL = toPx(fl[263]);
   const eyeMid = mid(eR, eL), eyeDist = Math.max(10, Math.hypot(eL.x - eR.x, eL.y - eR.y));
   return {
-    yaw: Math.max(-1, Math.min(1, (nose.x - eyeMid.x) / (eyeDist * 0.55))),
-    pitch: Math.max(-0.8, Math.min(0.8, (nose.y - eyeMid.y) / eyeDist - 0.62)),
-    roll: Math.atan2(eL.y - eR.y, eL.x - eR.x)
+    yaw: Math.max(-0.75, Math.min(0.75, (nose.x - eyeMid.x) / (eyeDist * 0.55))),
+    pitch: Math.max(-0.55, Math.min(0.55, (nose.y - eyeMid.y) / eyeDist - 0.62)),
+    roll: Math.max(-0.32, Math.min(0.32, Math.atan2(eL.y - eR.y, eL.x - eR.x)))
   };
-}
-function tileAt(pack, poseKey) {
-  const a = pack.anchors;
-  if (a && a[poseKey]) return a[poseKey];
-  const m = (pack.manifest.talk || {}).patches || {};
-  return { mouth: m.mouthO && m.mouthO.rect, eyes: m.blink && m.blink.rect };
 }
 function drawTile(img, cx, cy, w, rot) {
   if (!img) return;
@@ -317,19 +399,15 @@ function drawTile(img, cx, cy, w, rot) {
   ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore();
 }
 function drawFaceTiles(pack, place) {
-  const fs = faceState(), anch = tileAt(pack, 'base');
-  if (!anch) return;
-  const man = pack.manifest.talk || {};
-  if (fs.blink && pack.tiles.blink && anch.eyes) {
-    const p = place(anch.eyes[0], anch.eyes[1]);
-    const w = ((man.patches && man.patches.blink && man.patches.blink.w) || 170) * place.scale;
-    drawTile(pack.tiles.blink, p.x, p.y, w, place.rot);
+  const fs = faceState(), F = pack.face || {};
+  if (fs.blink && pack.tiles.blink && F.blink) {
+    const p = place(F.blink.c[0], F.blink.c[1]);
+    drawTile(pack.tiles.blink, p.x, p.y, F.blink.w * place.scale, place.rot);
   }
-  if (fs.mouth && pack.tiles[fs.mouth] && anch.mouth) {
-    const p = place(anch.mouth[0], anch.mouth[1]);
-    let w = ((man.patches && man.patches[fs.mouth] && man.patches[fs.mouth].w) || 110) * place.scale;
-    if (place.wMul) w *= place.wMul;
-    if (fs.wide && fs.mouth === 'mouthE') w *= 1.2;
+  if (fs.mouth && pack.tiles[fs.mouth] && F[fs.mouth]) {
+    const p = place(F[fs.mouth].c[0], F[fs.mouth].c[1]);
+    let w = F[fs.mouth].w * place.scale;
+    if (fs.wide && fs.mouth === 'E') w *= 1.2;
     drawTile(pack.tiles[fs.mouth], p.x, p.y, w, place.rot);
   }
 }
@@ -341,6 +419,7 @@ function drawStrip(st, liveFrom, liveTo) {
   const rf = st.from, rt = st.to;
   const ra = Math.atan2(rt[1] - rf[1], rt[0] - rf[0]), la = Math.atan2(liveTo.y - liveFrom.y, liveTo.x - liveFrom.x);
   const rl = Math.hypot(rt[0] - rf[0], rt[1] - rf[1]) || 1, ll = Math.hypot(liveTo.x - liveFrom.x, liveTo.y - liveFrom.y);
+  if (ll < 4) return;
   ctx.save(); ctx.translate(liveFrom.x, liveFrom.y); ctx.rotate(la - ra); ctx.scale(ll / rl, ll / rl);
   ctx.drawImage(st.img, -(rf[0] - st.box[0]), -(rf[1] - st.box[1])); ctx.restore();
 }
@@ -352,6 +431,7 @@ function drawLead() {
   const W = stage.width, H = stage.height, lm = state.pose;
   if (!lm) {
     const img = pack.img.base, h = H * 0.94, w = h * img.naturalWidth / img.naturalHeight;
+    shadow(W / 2, H - 6, w * 0.7);
     ctx.drawImage(img, (W - w) / 2, H - h, w, h);
     return;
   }
@@ -360,40 +440,48 @@ function drawLead() {
   const torsoVec = { x: neckC.x - hip.x, y: neckC.y - hip.y };
   const torsoLen = Math.max(30, Math.hypot(torsoVec.x, torsoVec.y));
   const tilt = Math.atan2(torsoVec.x, -torsoVec.y);
-  const rig = RIG_PACKS.has(cast.lead) ? buildRig(pack) : null;
+  const rig = (RIG_PACKS.has(cast.lead) && pack.rig) ? pack.rig : null;
   if (rig) {
-    const restTorso = (RIG_T.hip[1] - 351 / 936) * rig.H; // neck->hip in image px (295)
-    // size from your full body span, so the character covers you completely
-    const ank = mid(P(27), P(28)), span = Math.max(60, ank.y - P(0).y);
-    const k = Math.max(span * 1.14 / rig.H, torsoLen * 1.02 / restTorso);
-    const rel = i => {
-      const p = P(i), d = restTorso * k;
-      return { x: hip.x + (p.x - hip.x) / torsoLen * d, y: hip.y + (p.y - hip.y) / torsoLen * d };
-    };
-    shadow(hip.x, Math.min(H - 8, hip.y + (rig.H - rig.J.hip[1]) * k * 0.98), 320 * k);
-    ctx.save(); ctx.translate(hip.x, hip.y); ctx.rotate(tilt); ctx.scale(k, k);
-    ctx.drawImage(rig.erased, -rig.J.hip[0], -rig.J.hip[1]); ctx.restore();
-    drawStrip(rig.strips.Rup, rel(12), rel(14));
-    drawStrip(rig.strips.Rlo, rel(14), rel(16));
-    drawStrip(rig.strips.Lup, rel(11), rel(13));
-    drawStrip(rig.strips.Llo, rel(13), rel(15));
-    // head: its own piece, so it can look where you look
-    const hp = headPose(), hrot = tilt + hp.roll * 0.85;
-    const torsoPt = (fx, fy) => {
-      const dx = (fx - rig.J.hip[0]) * k, dy = (fy - rig.J.hip[1]) * k;
+    const J = rig.J;
+    const liveShoulder = Math.max(24, Math.hypot(P(11).x - P(12).x, P(11).y - P(12).y));
+    let k = liveShoulder / J.shoulderDist;
+    k = Math.max(0.10, Math.min(k, (H * 1.35) / rig.H));
+    const relScale = k * J.shoulderDist / liveShoulder;
+    const O = neckC, org = J.neck;
+    const imgPt = (fx, fy) => {
+      const dx = (fx - org[0]) * k, dy = (fy - org[1]) * k;
       const c = Math.cos(tilt), s = Math.sin(tilt);
-      return { x: hip.x + dx * c - dy * s, y: hip.y + dx * s + dy * c };
+      return { x: O.x + dx * c - dy * s, y: O.y + dx * s + dy * c };
     };
-    if (rig.head) {
-      const pv = rig.head.pivot, pivLive = torsoPt(pv[0], pv[1]);
-      ctx.save(); ctx.translate(pivLive.x, pivLive.y); ctx.rotate(hrot);
-      ctx.scale(k * (1 - 0.35 * Math.abs(hp.yaw)), k);
-      ctx.drawImage(rig.head.img, -(pv[0] - rig.head.box[0]), -(pv[1] - rig.head.box[1])); ctx.restore();
-    }
-    const place = (fx, fy) => torsoPt(fx + hp.yaw * 30, fy + hp.pitch * 26);
-    place.scale = k; place.rot = hrot; place.wMul = 1 - 0.28 * Math.abs(hp.yaw);
-    drawFaceTiles(pack, place);
+    const rel = i => { const p = P(i); return { x: O.x + (p.x - O.x) * relScale, y: O.y + (p.y - O.y) * relScale }; };
+    const feet = imgPt(J.hip[0], rig.bbox.y + rig.bbox.h);
+    shadow(feet.x, Math.min(H - 6, feet.y), 300 * k);
+    ctx.save(); ctx.translate(O.x, O.y); ctx.rotate(tilt); ctx.scale(k, k);
+    ctx.drawImage(rig.erased, -org[0], -org[1]); ctx.restore();
+    // arms: shoulders pinned to the body art, elbows/wrists follow you
+    drawStrip(rig.strips.Rup, imgPt(J.shoR[0], J.shoR[1]), rel(14));
+    drawStrip(rig.strips.Rlo, rel(14), rel(16));
+    drawStrip(rig.strips.Lup, imgPt(J.shoL[0], J.shoL[1]), rel(13));
+    drawStrip(rig.strips.Llo, rel(13), rel(15));
+    // head: own piece, gaze-driven, face tiles drawn inside its transform
+    const hpR = headPoseRaw(), hp = state.hpS;
+    if (hpR) { hp.yaw += (hpR.yaw - hp.yaw) * 0.5; hp.pitch += (hpR.pitch - hp.pitch) * 0.5; hp.roll += (hpR.roll - hp.roll) * 0.5; }
+    else { hp.yaw *= 0.92; hp.pitch *= 0.92; hp.roll *= 0.92; }
+    const pv = rig.head.pivot, pivLive = imgPt(pv[0], pv[1]);
+    ctx.save(); ctx.translate(pivLive.x, pivLive.y); ctx.rotate(tilt + hp.roll * 0.85);
+    ctx.scale(k * (1 - 0.35 * Math.abs(hp.yaw)), k);
+    ctx.drawImage(rig.head.img, -(pv[0] - rig.head.box[0]), -(pv[1] - rig.head.box[1]));
+    const fs = faceState(), F = pack.face || {};
+    const tileLocal = (imgT, c, w) => {
+      if (!imgT || !c) return;
+      const h = w * imgT.naturalHeight / imgT.naturalWidth;
+      ctx.drawImage(imgT, c[0] - pv[0] - w / 2, c[1] - pv[1] - h / 2, w, h);
+    };
+    if (fs.blink && F.blink) tileLocal(pack.tiles.blink, F.blink.c, F.blink.w);
+    if (fs.mouth && F[fs.mouth]) tileLocal(pack.tiles[fs.mouth], F[fs.mouth].c, F[fs.mouth].w * (fs.wide && fs.mouth === 'E' ? 1.2 : 1));
+    ctx.restore();
   } else {
+    if (RIG_PACKS.has(cast.lead) && !pack.rigFailed) buildRigAsync(pack); // still cutting the puppet: anchored meanwhile
     const img = pack.img.base;
     const ankY = Math.max(P(27).y, P(28).y), span = Math.max(80, ankY - P(0).y);
     const charH = Math.min(H * 1.05, span * 1.5), charW = charH * img.naturalWidth / img.naturalHeight;
@@ -436,15 +524,13 @@ function drawCoActors(now) {
     ctx.rotate(Math.max(-0.08, Math.min(0.08, ((a.tx || a.x) - a.x) * 0.0009)));
     ctx.drawImage(img, -w / 2, -h, w, h);
     ctx.restore();
-    if (a.talk > 0.5 && pack.tiles.mouthO) {
-      const anch = tileAt(pack, 'base');
-      if (anch && anch.mouth) {
-        const mx = a.x - w / 2 + anch.mouth[0] / img.naturalWidth * w;
-        const my = feetY + bobA * a.p - h + anch.mouth[1] / img.naturalHeight * h;
-        const tw = (((pack.manifest.talk || {}).patches || {}).mouthO || {}).w || 110;
-        ctx.save(); ctx.globalAlpha = Math.min(1, a.p * 1.6);
-        drawTile(pack.tiles.mouthO, mx, my, tw * (w / img.naturalWidth) * 1.15, 0); ctx.restore();
-      }
+    if (a.talk > 0.5 && pack.tiles.O && pack.face && pack.face.O) {
+      ctx.save(); ctx.globalAlpha = Math.min(1, a.p * 1.6);
+      drawTile(pack.tiles.O,
+        a.x - w / 2 + pack.face.O.c[0] / img.naturalWidth * w,
+        feetY + bobA * a.p - h + pack.face.O.c[1] / img.naturalHeight * h,
+        pack.face.O.w * (w / img.naturalWidth) * 1.15, 0);
+      ctx.restore();
     }
   }
 }
@@ -459,16 +545,19 @@ function roundRectPath(x, y, w, h, r) {
   ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
   ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
+let fpsFrames = 0, fpsLast = 0, fpsEMA = 60, lastFrameT = 0;
 function loop(ts) {
   requestAnimationFrame(loop);
   fitStage();
+  if (lastFrameT) fpsEMA += ((1000 / Math.max(1, ts - lastFrameT)) - fpsEMA) * 0.05;
+  lastFrameT = ts;
   if (state.mode === 'camera') infer();
   if (state.mode === 'demo') synthDemo(ts || 0);
   smoothAll(state.mode === 'idle' ? 1 : 0.62);
   const W = stage.width, H = stage.height;
   ctx.clearRect(0, 0, W, H);
   if (state.mode === 'camera' && cam.readyState >= 2) {
-    // your room stays — as soft blurred colour. YOU are gone: fully replaced.
+    // your room stays as soft blurred colour. YOU are gone: fully replaced.
     if (!state.bg) { state.bg = document.createElement('canvas'); state.bg.width = 192; state.bg.height = 108; }
     const bgc = state.bg.getContext('2d');
     const vw = cam.videoWidth, vh = cam.videoHeight, s = Math.max(192 / vw, 108 / vh);
@@ -502,32 +591,44 @@ function loop(ts) {
     const s = Math.floor((Date.now() - state.recStart) / 1000);
     btnRec.textContent = `■ ${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')} — Stop & Save`;
   }
+  if (msgEl.textContent && performance.now() - state.msgAt > 7000) msgEl.style.opacity = '0';
   dotPose.classList.toggle('on', !!state.pose);
   dotHand.classList.toggle('on', state.hands.length > 0);
   dotFace.classList.toggle('on', !!state.face);
   fpsFrames++;
-  if (ts - fpsLast > 1000) { fpsEl.textContent = fpsFrames + ' fps'; fpsFrames = 0; fpsLast = ts; }
+  if (ts - fpsLast > 1000) { fpsEl.textContent = Math.round(fpsEMA) + ' fps'; fpsFrames = 0; fpsLast = ts; }
+  // auto-quality: if the stage struggles, shed load once and say so in the ticket
+  if (state.mode === 'camera' && !state.autoBalanced && fpsEMA < 17 && state.quality === 'high') {
+    if (!state.lowFpsSince) state.lowFpsSince = ts;
+    if (ts - state.lowFpsSince > 5000) {
+      state.quality = 'balanced'; selQuality.value = 'balanced'; state.autoBalanced = true;
+      statusModel.textContent = 'Models: ready ✅ (auto-balanced for smoothness)';
+    }
+  } else state.lowFpsSince = 0;
 }
-let fpsFrames = 0, fpsLast = 0;
 
 /* ---------- controls ---------- */
 btnCam.addEventListener('click', async () => {
   try {
-    if (!poseL) { await initModels(); statusModel.textContent = 'Models: ready ✅'; }
+    if (!poseL) await initModels();
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
     cam.srcObject = stream; await cam.play();
     state.stream = stream; state.mode = 'camera';
     btnCam.textContent = '📷 Camera On ✅'; btnDemo.textContent = '🪄 Demo Mode'; btnRec.disabled = false;
     setMsg('You are live — and fully replaced. Look around, talk, laugh, dance: the character does it all with you.');
-  } catch (e) { setMsg('Camera blocked: ' + e.message + ' — try Demo Mode instead.'); }
+  } catch (e) {
+    statusModel.textContent = 'Models: failed to load — check connection, tap Start Camera to retry';
+    poseL = null;
+    setMsg('Something blocked the stage: ' + e.message + ' — try again, or use Demo Mode.');
+  }
 });
 btnDemo.addEventListener('click', () => {
   state.mode = state.mode === 'demo' ? 'idle' : 'demo';
   btnDemo.textContent = state.mode === 'demo' ? '🪄 Stop Demo' : '🪄 Demo Mode';
   btnRec.disabled = state.mode === 'idle';
-  setMsg(state.mode === 'demo' ? 'Demo Mode: a virtual performer drives the lead — watch it wave back. (The real magic needs your camera.)' : '');
+  setMsg(state.mode === 'demo' ? 'Demo Mode: a virtual performer drives the lead — watch it wave and look around. (The real magic needs your camera.)' : '');
 });
-selQuality.addEventListener('change', () => { state.quality = selQuality.value; });
+selQuality.addEventListener('change', () => { state.quality = selQuality.value; state.autoBalanced = false; });
 btnReel.addEventListener('click', () => {
   state.reel = !state.reel;
   stage.classList.toggle('reel', state.reel);
@@ -541,7 +642,9 @@ btnRec.addEventListener('click', () => {
     const canvasStream = stage.captureStream(30);
     const tracks = [...canvasStream.getVideoTracks()];
     if (state.stream && state.stream.getAudioTracks().length) tracks.push(state.stream.getAudioTracks()[0]);
-    const rec = new MediaRecorder(new MediaStream(tracks), { mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm' });
+    const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', '']
+      .find(m => m === '' || MediaRecorder.isTypeSupported(m));
+    const rec = new MediaRecorder(new MediaStream(tracks), mime ? { mimeType: mime } : undefined);
     state.chunks = [];
     rec.ondataavailable = e => { if (e.data.size) state.chunks.push(e.data); };
     rec.onstop = () => {
@@ -562,5 +665,8 @@ btnRetake.addEventListener('click', () => {
   downloadA.hidden = true; btnRetake.hidden = true; btnRec.click();
 });
 
-fillCastSelects().then(() => { ensurePack(cast.lead); ensurePack(cast.leftHand); ensurePack(cast.rightHand); });
+/* Debug/testing handle — lets the sandbox harness drive synthetic performers. */
+window.__rangmanch = { version: VERSION, state, raw, cast, packs, ensurePack, buildRigAsync, stage };
+
+fillCastSelects();
 requestAnimationFrame(loop);

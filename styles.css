@@ -110,6 +110,7 @@ video#cam { display: none; }
   background: rgba(20,11,4,.88); color: var(--cream);
   border: 1.5px solid var(--gold); border-radius: 999px;
   padding: 8px 18px; font-size: 14px; max-width: 88%; text-align: center; pointer-events: none;
+  transition: opacity 0.6s ease;
 }
 .stage-msg:empty { display: none; }
 .stage-board {
