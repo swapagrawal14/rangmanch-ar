@@ -21,7 +21,7 @@ const statusModel = $('#status-model'), dotPose = $('#dot-pose'), dotHand = $('#
 const WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
 const MODEL = 'https://storage.googleapis.com/mediapipe-models';
 const PACKS_BASE = 'assets/packs/';
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 
 /* ---------- cast ---------- */
 const CAST = [
@@ -366,7 +366,7 @@ function smoothLm(prev, next, a) {
   return out;
 }
 function smoothAll(alpha) {
-  state.pose = smoothLm(state.pose, raw.pose, alpha);
+  state.pose = raw.pose ? smoothLm(state.pose, raw.pose, alpha) : null; // lost body = stop, don't ghost
   state.hands = raw.hands.map((h, i) => smoothLm(state.hands[i], h, alpha));
   state.face = raw.face ? {
     landmarks: smoothLm(state.face && state.face.landmarks, raw.face.landmarks, alpha),
@@ -376,19 +376,21 @@ function smoothAll(alpha) {
 
 /* ---------- MediaPipe ---------- */
 let poseL = null, handL = null, faceL = null, lastVideoTime = -1, frameNo = 0;
-async function initModels() {
+let inferErrors = 0, cpuMode = false, lastPoseAt = 0, noPoseMsgAt = 0;
+async function initModels(forceCpu) {
   statusModel.textContent = 'Models: loading…';
   const { FilesetResolver, PoseLandmarker, HandLandmarker, FaceLandmarker } =
     await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
   const vision = await FilesetResolver.forVisionTasks(WASM);
   const mk = async (Cls, path, extra) => {
     const opts = d => Object.assign({ baseOptions: { modelAssetPath: `${MODEL}/${path}`, delegate: d }, runningMode: 'VIDEO', numPoses: 1, numHands: 2 }, extra || {});
+    if (forceCpu) return await Cls.createFromOptions(vision, opts('CPU'));
     try { return await Cls.createFromOptions(vision, opts('GPU')); } catch (e) { return await Cls.createFromOptions(vision, opts('CPU')); }
   };
   poseL = await mk(PoseLandmarker, 'pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task');
   handL = await mk(HandLandmarker, 'hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task');
   faceL = await mk(FaceLandmarker, 'face_landmarker/face_landmarker/float16/1/face_landmarker.task', { outputFaceBlendshapes: true });
-  statusModel.textContent = 'Models: ready ✅';
+  statusModel.textContent = cpuMode ? 'Models: ready ✅ (CPU mode)' : 'Models: ready ✅';
 }
 /* Pose runs every frame (it carries the body). Face and hands alternate on
    even/odd frames — they read perfectly at half rate and the stage stays
@@ -401,6 +403,7 @@ async function infer() {
   try {
     const pr = poseL.detectForVideo(cam, t);
     raw.pose = pr.landmarks && pr.landmarks[0] ? pr.landmarks[0] : null;
+    if (raw.pose) { lastPoseAt = performance.now(); inferErrors = 0; }
     if (high || frameNo % 2 === 0) {
       const hr = handL.detectForVideo(cam, t);
       raw.hands = hr.landmarks || [];
@@ -414,7 +417,15 @@ async function infer() {
         raw.face = { landmarks: fr.faceLandmarks[0], cats };
       } else raw.face = null;
     }
-  } catch (e) { /* transient inference error: keep last frame */ }
+  } catch (e) {
+    // a GPU delegate can initialise fine yet fail on every inference on some
+    // phones — after repeated failures, rebuild the models on CPU and go on
+    inferErrors++;
+    if (inferErrors === 20 && !cpuMode) {
+      cpuMode = true; poseL = null;
+      initModels(true).catch(() => { statusModel.textContent = 'Models: failed — tap Start Camera to retry'; });
+    }
+  }
 }
 
 /* ---------- demo mode (synthetic performer) ---------- */
@@ -521,10 +532,75 @@ function drawStrip(st, liveFrom, liveTo) {
 }
 
 /* ---------- the lead: YOU, converted ---------- */
+function updateHeadPose() {
+  const hpR = headPoseRaw(), hp = state.hpS;
+  if (hpR) { hp.yaw += (hpR.yaw - hp.yaw) * 0.5; hp.pitch += (hpR.pitch - hp.pitch) * 0.5; hp.roll += (hpR.roll - hp.roll) * 0.5; }
+  else { hp.yaw *= 0.92; hp.pitch *= 0.92; hp.roll *= 0.92; }
+}
+function drawHeadPiece(pack, rig, imgPt, k, tilt) {
+  const pv = rig.head.pivot, pivLive = imgPt(pv[0], pv[1]);
+  ctx.save(); ctx.translate(pivLive.x, pivLive.y); ctx.rotate(tilt + state.hpS.roll * 0.85);
+  ctx.scale(k * (1 - 0.35 * Math.abs(state.hpS.yaw)), k);
+  ctx.drawImage(rig.head.img, -(pv[0] - rig.head.box[0]), -(pv[1] - rig.head.box[1]));
+  const fs = faceState(), F = pack.face || {};
+  const tileLocal = (imgT, c, w) => {
+    if (!imgT || !c) return;
+    const h = w * imgT.naturalHeight / imgT.naturalWidth;
+    ctx.drawImage(imgT, c[0] - pv[0] - w / 2, c[1] - pv[1] - h / 2, w, h);
+  };
+  if (fs.blink && F.blink) tileLocal(pack.tiles.blink, F.blink.c, F.blink.w);
+  if (fs.mouth && F[fs.mouth]) tileLocal(pack.tiles[fs.mouth], F[fs.mouth].c, F[fs.mouth].w * (fs.wide && fs.mouth === 'E' ? 1.2 : 1));
+  ctx.restore();
+}
+/* Selfie distance: no body in frame, but a face — the performance still
+   lives. The character is anchored to your face: it stands where you are,
+   its head turns with yours, its mouth and blinks are yours, arms at rest. */
+function drawFaceLed(pack, W, H) {
+  const fl = state.face.landmarks;
+  const e1 = toPx(fl[33]), e2 = toPx(fl[263]);
+  const eyeC = mid(e1, e2), eyeSpan = Math.max(12, Math.hypot(e2.x - e1.x, e2.y - e1.y));
+  const rig = (RIG_PACKS.has(cast.lead) && pack.rig) ? pack.rig : null;
+  if (rig) {
+    const J = rig.J, blinkW = (pack.manifest.talk.patches.blink || {}).w || J.faceW / 1.55;
+    let k = eyeSpan / blinkW;
+    k = Math.max(0.10, Math.min(k, (H * 1.25) / rig.H));
+    const tilt = state.hpS.roll;
+    const nox = (J.neck[0] - J.faceCx) * k, noy = (J.neck[1] - J.eyeY) * k;
+    const c = Math.cos(tilt), s = Math.sin(tilt);
+    const O = { x: eyeC.x + nox * c - noy * s, y: eyeC.y + nox * s + noy * c }, org = J.neck;
+    const imgPt = (fx, fy) => {
+      const dx = (fx - org[0]) * k, dy = (fy - org[1]) * k;
+      return { x: O.x + dx * c - dy * s, y: O.y + dx * s + dy * c };
+    };
+    const feet = imgPt(J.hip[0], rig.bbox.y + rig.bbox.h);
+    state.leadFeetY = Math.min(H - 4, feet.y); state.leadH = rig.bbox.h * k;
+    shadow(feet.x, Math.min(H - 6, feet.y), 300 * k);
+    drawStrip(rig.strips.Rup, imgPt(J.shoR[0], J.shoR[1]), imgPt(J.elbR[0], J.elbR[1]));
+    drawStrip(rig.strips.Lup, imgPt(J.shoL[0], J.shoL[1]), imgPt(J.elbL[0], J.elbL[1]));
+    ctx.save(); ctx.translate(O.x, O.y); ctx.rotate(tilt); ctx.scale(k, k);
+    ctx.drawImage(rig.erased, -org[0], -org[1]); ctx.restore();
+    drawStrip(rig.strips.Rlo, imgPt(J.elbR[0], J.elbR[1]), imgPt(J.wriR[0], J.wriR[1]));
+    drawStrip(rig.strips.Llo, imgPt(J.elbL[0], J.elbL[1]), imgPt(J.wriL[0], J.wriL[1]));
+    drawHeadPiece(pack, rig, imgPt, k, tilt);
+  } else {
+    if (RIG_PACKS.has(cast.lead) && !pack.rigFailed) buildRigAsync(pack);
+    const img = pack.img.base, blinkW = ((pack.manifest.talk || {}).patches || {}).blink ? pack.manifest.talk.patches.blink.w : 130;
+    const charH = Math.min(H * 1.5, eyeSpan / blinkW * img.naturalHeight), charW = charH * img.naturalWidth / img.naturalHeight;
+    const top = eyeC.y - charH * 0.22;
+    state.leadFeetY = Math.min(H - 4, top + charH); state.leadH = charH;
+    shadow(eyeC.x, Math.min(H - 6, top + charH), charW * 0.8);
+    ctx.drawImage(img, eyeC.x - charW / 2, top, charW, charH);
+    const place = (fx, fy) => ({ x: eyeC.x - charW / 2 + fx / img.naturalWidth * charW, y: top + fy / img.naturalHeight * charH });
+    place.scale = charW / img.naturalWidth; place.rot = 0;
+    drawFaceTiles(pack, place);
+  }
+}
 function drawLead() {
   const pack = packs[cast.lead];
   if (!pack || !pack.img.base) return;
   const W = stage.width, H = stage.height, lm = state.pose;
+  updateHeadPose();
+  if (!lm && state.face && state.face.landmarks) { drawFaceLed(pack, W, H); return; }
   if (!lm) {
     const img = pack.img.base, h = H * 0.94, w = h * img.naturalWidth / img.naturalHeight;
     state.leadH = h; state.leadFeetY = H - 4;
@@ -564,22 +640,7 @@ function drawLead() {
     drawStrip(rig.strips.Rlo, rel(14), rel(16));
     drawStrip(rig.strips.Llo, rel(13), rel(15));
     // head: own piece, gaze-driven, face tiles drawn inside its transform
-    const hpR = headPoseRaw(), hp = state.hpS;
-    if (hpR) { hp.yaw += (hpR.yaw - hp.yaw) * 0.5; hp.pitch += (hpR.pitch - hp.pitch) * 0.5; hp.roll += (hpR.roll - hp.roll) * 0.5; }
-    else { hp.yaw *= 0.92; hp.pitch *= 0.92; hp.roll *= 0.92; }
-    const pv = rig.head.pivot, pivLive = imgPt(pv[0], pv[1]);
-    ctx.save(); ctx.translate(pivLive.x, pivLive.y); ctx.rotate(tilt + hp.roll * 0.85);
-    ctx.scale(k * (1 - 0.35 * Math.abs(hp.yaw)), k);
-    ctx.drawImage(rig.head.img, -(pv[0] - rig.head.box[0]), -(pv[1] - rig.head.box[1]));
-    const fs = faceState(), F = pack.face || {};
-    const tileLocal = (imgT, c, w) => {
-      if (!imgT || !c) return;
-      const h = w * imgT.naturalHeight / imgT.naturalWidth;
-      ctx.drawImage(imgT, c[0] - pv[0] - w / 2, c[1] - pv[1] - h / 2, w, h);
-    };
-    if (fs.blink && F.blink) tileLocal(pack.tiles.blink, F.blink.c, F.blink.w);
-    if (fs.mouth && F[fs.mouth]) tileLocal(pack.tiles[fs.mouth], F[fs.mouth].c, F[fs.mouth].w * (fs.wide && fs.mouth === 'E' ? 1.2 : 1));
-    ctx.restore();
+    drawHeadPiece(pack, rig, imgPt, k, tilt);
   } else {
     if (RIG_PACKS.has(cast.lead) && !pack.rigFailed) buildRigAsync(pack); // still cutting the puppet: anchored meanwhile
     const img = pack.img.base;
@@ -668,8 +729,10 @@ function loop(ts) {
     bgc.save(); bgc.translate(192, 0); bgc.scale(-1, 1);
     bgc.drawImage(cam, (192 - vw * s) / 2, (108 - vh * s) / 2, vw * s, vh * s); bgc.restore();
     ctx.save(); ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(state.bg, 0, 0, W, H);
-    ctx.fillStyle = 'rgba(26,9,13,0.30)'; ctx.fillRect(0, 0, W, H);
+    ctx.filter = 'blur(16px)'; // backdrop is pure colour wash — nobody is recognisable in it
+    ctx.drawImage(state.bg, -24, -24, W + 48, H + 48);
+    ctx.filter = 'none';
+    ctx.fillStyle = 'rgba(26,9,13,0.42)'; ctx.fillRect(0, 0, W, H);
     const fg = ctx.createLinearGradient(0, H * 0.8, 0, H);
     fg.addColorStop(0, 'rgba(40,20,10,0)'); fg.addColorStop(1, 'rgba(40,20,10,0.55)');
     ctx.fillStyle = fg; ctx.fillRect(0, H * 0.8, W, H * 0.2); ctx.restore();
@@ -681,6 +744,11 @@ function loop(ts) {
   }
   drawLead();
   if (state.mode !== 'idle' && chkCo.checked) drawCoActors(ts || 0);
+  // honest guidance: camera is on but no body found — say what to do
+  if (state.mode === 'camera' && poseL && !state.pose && performance.now() - lastPoseAt > 2500 && (ts || 0) - noPoseMsgAt > 7000) {
+    noPoseMsgAt = ts || 0;
+    setMsg('I can\'t see your body yet — hold the phone further back so your shoulders and waist are in frame. (Face-only works too: your face alone drives the head, mouth and blinks.)');
+  }
   if (captionInput.value.trim()) {
     const txt = captionInput.value.trim();
     ctx.save(); ctx.font = `700 ${Math.round(H * 0.045)}px 'Space Grotesk', sans-serif`;

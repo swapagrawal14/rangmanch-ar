@@ -161,6 +161,21 @@ await page.evaluate(() => {
 await sleep(900);
 await shot('11-sanjay-lead');
 
+// face-only mode: selfie distance — no pose, face drives the lead
+await page.evaluate(() => {
+  const R = window.__rangmanch;
+  R.state.mode = 'camera';
+  R.raw.pose = null;
+  const fl = []; for (let i = 0; i < 468; i++) fl.push({ x: 0.5, y: 0.3, z: 0 });
+  fl[33] = { x: 0.44, y: 0.30, z: 0 }; fl[263] = { x: 0.56, y: 0.30, z: 0 };
+  fl[1] = { x: 0.5, y: 0.33, z: 0 };
+  R.raw.face = { landmarks: fl, cats: { eyeBlinkLeft: 0, eyeBlinkRight: 0, jawOpen: 0.55, mouthSmileLeft: 0.1, mouthSmileRight: 0.1, mouthFunnel: 0 } };
+  R.raw.hands = [];
+});
+await sleep(900);
+await shot('13-faceonly');
+results.checks.faceOnly = true;
+
 // recording round-trip (demo drives it)
 await page.selectOption('#cast-body', 'swapnil');
 await page.evaluate(() => { window.__rangmanch.state.mode = 'idle'; });
