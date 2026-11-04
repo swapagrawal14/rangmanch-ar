@@ -47,6 +47,32 @@
       "point": "talk/pose_point.png",
       "open": "talk/pose_open.png",
       "thumbs": "talk/pose_thumbs.png"
+    },
+    "torso": "talk/torso.png",
+    "hairFront": "talk/hair_front.png",
+    "freeArms": {
+      "note": "v2.3 Free arms rig, base-drawing pixels. tools/make-armless.py",
+      "shoulders": {
+        "L": [
+          218,
+          436
+        ],
+        "R": [
+          502,
+          436
+        ]
+      },
+      "upper": 225,
+      "fore": 195,
+      "hand": 92,
+      "armW": 58,
+      "sleeveW": 92,
+      "sleeveLen": 0.55,
+      "sleeve": "#5c966f",
+      "skin": "#d18a64",
+      "ink": "#1a1a19",
+      "outline": 6,
+      "hipY": 815
     }
   },
   "voice": {
@@ -55,7 +81,10 @@
   },
   "style": {
     "bible": "soft Korean doodle, bold black outlines, big round eyes, pink tulip accent, hot pink + sunny yellow palette",
-    "palette": ["#ff4d8d", "#ffd23f"],
+    "palette": [
+      "#ff4d8d",
+      "#ffd23f"
+    ],
     "outfit": "doctor's scrubs"
   },
   "forgedFrom": {

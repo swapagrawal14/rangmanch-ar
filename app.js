@@ -13,10 +13,17 @@
    hands are read too (gestures.js: hand on mouth, shh, thinking, facepalm,
    salute, covering the face, hands on head, namaste, clap, fist, thumbs,
    point, open palm) and each is performed as its own authored drawing, and
-   a wave really waves (two drawn frames, hard cuts in time with your hand). */
-import { classifyHandsFace, makeGestureMemory } from './gestures.js?v=2.2.1';
-import { HeadTracker, HeadWarpGL, warpPoint, OneEuro, swings } from './headwarp.js?v=2.2.1';
-import { synthFace, synthHand } from './synth.js?v=2.2.1';
+   a wave really waves (two drawn frames, hard cuts in time with your hand).
+   v2.3: Free arms (freearms.js) — for a character with an arm rig (Doodle
+   Swapnil first) the arms are no longer chosen from drawn poses: an armless
+   torso drawing carries the head, face tiles and head warp, and cartoon arms
+   and hands are drawn every frame from your pose + hand landmarks, so any
+   gesture you make (both hands up, a heart, peace, a shrug…) is copied.
+   Toggle "Free arms" off to get the pose drawings back. */
+import { classifyHandsFace, makeGestureMemory } from './gestures.js?v=2.3.0';
+import { HeadTracker, HeadWarpGL, warpPoint, OneEuro, swings } from './headwarp.js?v=2.3.0';
+import { synthFace, synthHand } from './synth.js?v=2.3.0';
+import { FreeArms } from './freearms.js?v=2.3.0';
 
 const $ = s => document.querySelector(s);
 const stage = $('#stage'), ctx = stage.getContext('2d');
@@ -25,13 +32,14 @@ const btnCam = $('#btn-camera'), btnDemo = $('#btn-demo'), btnRec = $('#btn-reco
 const downloadA = $('#download'), btnShare = $('#btn-share'), btnReel = $('#btn-reel');
 const leadStrip = $('#lead-strip'), selLeft = $('#cast-left'), selRight = $('#cast-right');
 const selQuality = $('#quality'), captionInput = $('#caption-input'), chkCo = $('#coactors');
+const chkFA = $('#freearms'), faWrap = $('#fa-wrap');
 const statusModel = $('#status-model'), dotPose = $('#dot-pose'), dotHand = $('#dot-hand'), dotFace = $('#dot-face'), fpsEl = $('#fps');
 
 const MP_VER = '0.10.14';
 const WASM = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/wasm`;
 const MODEL = 'https://storage.googleapis.com/mediapipe-models';
 const PACKS_BASE = 'assets/packs/';
-const VERSION = '2.2.1';
+const VERSION = '2.3.0';
 
 /* ---------- cast ---------- */
 const CAST = [
@@ -111,9 +119,14 @@ function ensurePack(id, withPoses) {
       const files = talk.files || {};
       await Promise.all([
         talk.base ? loadImage(base + talk.base).then(i => { img.base = i; }).catch(() => {}) : null,
-        ...['A', 'O', 'E', 'blink'].map(k => files[k] ? loadImage(base + files[k]).then(i => { tiles[k] = i; }).catch(() => {}) : null)
+        ...['A', 'O', 'E', 'blink'].map(k => files[k] ? loadImage(base + files[k]).then(i => { tiles[k] = i; }).catch(() => {}) : null),
+        // v2.3 free arms: the armless torso + the hair strand that lies over the shoulder
+        talk.freeArms && talk.torso ? loadImage(base + talk.torso).then(i => { img.torso = i; }).catch(() => {}) : null,
+        talk.freeArms && talk.hairFront ? loadImage(base + talk.hairFront).then(i => { img.hairFront = i; }).catch(() => {}) : null
       ]);
-      packs[id] = { id, manifest, img, tiles, poses: {}, poseInfo: buildPoseInfo(manifest, id), posesLoading: null };
+      const poseInfo = buildPoseInfo(manifest, id), bi = poseInfo.base || {};
+      const fa = talk.freeArms && img.torso ? new FreeArms(talk.freeArms, bi.eyes && bi.mouth ? { eyes: bi.eyes, mouth: bi.mouth } : null) : null;
+      packs[id] = { id, manifest, img, tiles, poses: {}, poseInfo, posesLoading: null, fa };
       return packs[id];
     })();
   }
@@ -161,10 +174,11 @@ async function setLead(id) {
   cast.lead = id;
   for (const b of leadStrip.querySelectorAll('.lead-pick')) b.setAttribute('aria-pressed', b.dataset.id === id ? 'true' : 'false');
   state.poseName = 'base'; state.poseSide = null; state.candName = null; state.figInit = false;
-  try { const p = await ensurePack(id, true); if (state.mode !== 'idle') loadExtraPoses(p); } catch (e) { setMsg('Could not load that character — check your connection.'); }
+  try { const p = await ensurePack(id, true); if (state.mode !== 'idle') loadExtraPoses(p); if (cast.lead === id) faWrap.hidden = !p.fa; } catch (e) { setMsg('Could not load that character — check your connection.'); }
 }
 selLeft.addEventListener('change', async () => { cast.leftHand = selLeft.value; updateThumb('left', cast.leftHand); if (chkCo.checked) ensurePack(cast.leftHand).catch(() => {}); });
 selRight.addEventListener('change', async () => { cast.rightHand = selRight.value; updateThumb('right', cast.rightHand); if (chkCo.checked) ensurePack(cast.rightHand).catch(() => {}); });
+chkFA.addEventListener('change', () => { state.freeArms = chkFA.checked; state.compSig = null; });
 chkCo.addEventListener('change', () => {
   if (chkCo.checked) { ensurePack(cast.leftHand).catch(() => {}); ensurePack(cast.rightHand).catch(() => {}); if (state.mode === 'camera') ensureHands(); }
 });
@@ -217,7 +231,7 @@ const state = {
   wristHist: { a: [], b: [] }, fig: null, figInit: false, talkSm: 0, nextBlink: 0,
   gmem: makeGestureMemory(), headT: new HeadTracker(), head: { roll: 0, yaw: 0, pitch: 0, gest: null },
   warpScale: 1, waveFrame: 0, waveCx: null, waveFlipAt: 0, waveOscAt: 0, gestVia: null, drawKey: 'base', warpOn: false,
-  leadFeetY: 0, leadH: 0, figDbg: null, mouthDbg: null, wakeLock: null,
+  leadFeetY: 0, leadH: 0, figDbg: null, mouthDbg: null, wakeLock: null, freeArms: true, armsDbg: null,
   actors: { left: { p: 0, x: 0, talk: 0, talkT: 0, last: 0, tx: 0 }, right: { p: 0, x: 0, talk: 0, talkT: 0, last: 0, tx: 0 } }
 };
 const raw = { pose: null, face: null, hands: [] };
@@ -591,12 +605,32 @@ function resolvePose(pack, name, frame) {
 }
 let headGL = null, compCv = null;
 const PAD = 90; // margin around the drawing for the head to move into
+const freeArmsOn = pack => !!(pack && pack.fa && state.freeArms);
+/* Free arms: your landmarks → the drawing's own pixels (the inverse of the
+   figure transform), then the arm rig solves and draws there. */
+function updateFreeArms(pack, now) {
+  const m = ctx.getTransform(), inv = m.inverse();
+  const toD = p => ({ x: inv.a * p.x + inv.c * p.y + inv.e, y: inv.b * p.x + inv.d * p.y + inv.f });
+  const live = state.mode !== 'idle';
+  const lm = live ? state.pose : null;
+  const pose = lm ? lm.map(q => { const d = toD(toPx(q)); d.z = q.z || 0; d.v = q.visibility ?? 1; return d; }) : null;
+  const hands = live ? (raw.hands || []).filter(hh => hh && hh.length === 21).map(hh => hh.map(q => { const d = toD(toPx(q)); d.z = q.z || 0; return d; })) : [];
+  const fs = live ? state.fs : null;
+  const face = fs && fs[33] && fs[263] && fs[13] ? { eyes: toD(mid(fs[33], fs[263])), mouth: toD(fs[13]) } : null;
+  pack.fa.update(pose, hands, face, now);
+  const T = q => q && [Math.round(m.a * q.x + m.c * q.y + m.e), Math.round(m.b * q.x + m.d * q.y + m.f)];
+  const arm = a => a && { S: T(a.S), E: T(a.E), W: T(a.W), tips: [4, 8, 12, 16, 20].map(i => T(a.hand[i])), hand: a.hand.map(T), live: a.live, stretch: +a.stretch.toFixed(3), faceW: +(a.faceW || 0).toFixed(2) };
+  const d = pack.fa.dbg;
+  state.armsDbg = { k: d.k && +d.k.toFixed(3), hands: d.hands, L: arm(d.L), R: arm(d.R), back: { L: pack.fa.arms.L.back, R: pack.fa.arms.R.back }, scale: Math.hypot(m.a, m.b) };
+}
 function drawFigure(pack, now, cx, feetY, h, roll) {
   const G = packGeom(pack);
-  const r = resolvePose(pack, state.poseName, state.waveFrame);
+  const fa = freeArmsOn(pack);
+  const r = fa ? { key: 'base', fbFace: null, sway: false } : resolvePose(pack, state.poseName, state.waveFrame);
   const key = r.key;
-  state.drawKey = key;
-  const img = key === 'base' ? pack.img.base : pack.poses[key];
+  state.drawKey = fa ? 'free' : key;
+  if (!fa) state.armsDbg = null;
+  const img = fa ? pack.img.torso : key === 'base' ? pack.img.base : pack.poses[key];
   if (!img) return;
   const pi = pack.poseInfo[key] || {}, bi = pack.poseInfo.base || {};
   if (r.sway) roll += (state.poseSide === 'L' ? 1 : -1) * 0.05; // no 2nd wave drawing: lean the figure instead
@@ -644,7 +678,7 @@ function drawFigure(pack, now, cx, feetY, h, roll) {
   const showBlink = allowEyes && (fs.blink || autoBlink) && pack.tiles.blink && patches.blink && pi.eyes;
   const mouthKey = allowMouth ? (fs.mouth || (fs.laugh ? 'E' : null)) : null;
   const showMouth = mouthKey && pack.tiles[mouthKey] && patches[mouthKey] && pi.mouth;
-  const sig = pack.id + '|' + key + '|' + (showBlink ? 1 : 0) + '|' + (showMouth ? mouthKey + ((fs.wide || fs.laugh) ? 'w' : '') : '-');
+  const sig = pack.id + '|' + key + (fa ? '+fa' : '') + '|' + (showBlink ? 1 : 0) + '|' + (showMouth ? mouthKey + ((fs.wide || fs.laugh) ? 'w' : '') : '-');
   let g = ctx, off = 0, upload = true;
   if (useWarp) {
     if (!compCv) compCv = document.createElement('canvas');
@@ -655,6 +689,7 @@ function drawFigure(pack, now, cx, feetY, h, roll) {
     if (upload) { g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cw, ch); g.setTransform(ws, 0, 0, ws, 0, 0); }
   } else state.compSig = null;
   state.mouthDbg = showMouth ? mouthKey : null;
+  if (fa) { updateFreeArms(pack, now); pack.fa.draw(ctx, 'back', null, G.W, G.H); } // arms behind the back
   if (!useWarp || upload) {
     g.drawImage(img, off, off, G.W, G.H);
     if (showBlink) {
@@ -678,6 +713,8 @@ function drawFigure(pack, now, cx, feetY, h, roll) {
       state.faceWarpDbg = [Math.round(m.a * q[0] + m.c * q[1] + m.e), Math.round(m.b * q[0] + m.d * q[1] + m.f)];
     }
   } else state.faceWarpDbg = null;
+  // free arms in front of the body — and of the face, so covering it or "shh" just works
+  if (fa) pack.fa.draw(ctx, 'front', pack.img.hairFront, G.W, G.H);
   ctx.restore();
   if (!state.face && now > state.nextBlink + 130) state.nextBlink = now + 2400 + Math.random() * 1800;
   state.leadFeetY = feetY; state.leadH = h; state.leadCx = cx;
@@ -1104,7 +1141,7 @@ btnRetake.addEventListener('click', () => {
 
 /* Debug/testing handle — lets the test harness drive synthetic performers. */
 window.__rangmanch = { version: VERSION, state, raw, cast, packs, ensurePack, classifyGesture, packGeom, stage, setLead, setReel, fixWebmDuration, pickRecType, MAP, toPx,
-  loadExtraPoses, resolvePose, warpPoint, synthFace, synthHand, ALL_POSES, EXTRA_KEYS, FALLBACK, get headGL() { return headGL; } };
+  loadExtraPoses, resolvePose, warpPoint, freeArmsOn, setFreeArms: on => { state.freeArms = !!on; chkFA.checked = !!on; state.compSig = null; }, synthFace, synthHand, ALL_POSES, EXTRA_KEYS, FALLBACK, get headGL() { return headGL; } };
 
 // phones held upright get the vertical 9:16 stage by default
 setReel(window.matchMedia('(orientation: portrait)').matches && window.innerWidth < 900);

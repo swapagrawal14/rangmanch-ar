@@ -66,6 +66,7 @@ and camera-shy creator who can act but cannot animate.
 
 | You do this | The stage does this |
 |---|---|
+| **Free arms (v2.3, Doodle Swapnil)** — anything with your arms and hands: both hands up, a heart, peace, thumbs-up, pointing, open palm, fist, a shrug, covering your face | Copied as you do it: cartoon arms drawn every frame from your pose (shoulder, elbow, wrist) hung from the character's own shoulders, and cartoon hands built from your 21 hand landmarks. Toggle **Free arms** off to get the drawn poses below back |
 | Wave, point, throw both arms open, thumbs-up | The lead performs its own drawing of that gesture — with **either** arm (the drawing is mirrored to match), even when your other hand is holding the phone. A real wave really waves: two drawn frames, cut in time with your hand |
 | Hand over your mouth, finger to your lips (shh), hand at your chin or cheek (thinking), palm on your forehead (facepalm), salute | The lead performs its own drawing of that gesture, read from where your fingers sit on your face |
 | Both hands over your face, both hands on your head, palms together (namaste), clap, raised fist | Same: each is its own authored drawing (Doodle Swapnil, Bunty, Swapnil and Sanjay have the full v2.2 set; other characters fall back to their nearest pose) |
@@ -118,6 +119,15 @@ single ~20 ms geometry scan, and if the frame rate
 sags the stage sheds load automatically and tells you on the ticket.
 
 ## Testing
+
+`node tests/v23.test.mjs` covers v2.3 Free arms (27 checks): the 2-bone IK
+keeps limb lengths for any target, both hands up, the mirror, a heart stays a
+heart (also with the pose wrists swapped), a hand at the mouth lands on the
+cartoon face, a lost hand is held 300 ms then eased down, and in Chromium:
+Free arms on by default for Doodle Swapnil, the toggle, other leads keep the
+pose system, mouth and head warp still work. v2.3 was also checked live with
+real MediaPipe against a fake camera playing real people (Mixkit clips: both
+hands up, two hand hearts).
 
 `node tests/v22.test.mjs` covers v2.2 (80 checks): the hand + face gesture
 classifier on synthetic landmark fixtures (`tests/fixtures.mjs`, at two
@@ -216,6 +226,8 @@ README visuals are generated from the packs' real art by
 - [x] v2.0 — **Stage Puppet**: authored poses + gesture classifier, cut-out rig removed
 - [x] v2.1 — **Phone first**: the stage fills a portrait phone (9:16 by default), camera on first tap, 29 MB → 0.7 MB first load, gestures with either arm (selfie-safe) and mirrored drawings, pose swaps without size jumps, face anchors for all 16 characters, MP4 recording + share sheet, WebM duration fix
 - [x] v2.2 — **Hands and head**: the head follows yours (tilt, turn, nod, shake), hand-at-face and two-hand gestures (hand on mouth, shh, thinking, facepalm, salute, cover, hands on head, namaste, clap, fist) each performed as its own drawing, a wave that really waves (two frames)
+- [x] v2.3 — **Free arms** (Doodle Swapnil first): an armless torso drawing (`tools/make-armless.py`) + procedural cartoon arms and hands from your pose and hand landmarks (`freearms.js`), so any gesture is copied, not snapped to a drawn pose
+- [ ] Free arms rigs for the other 15 characters
 - [ ] Per-character voice pitch for takes, scene list / multi-take editor
 - [ ] Vendored models for a fully offline build
 - [ ] The demo reel: *Germ vs Toothbrush*, performed entirely inside Rangmanch

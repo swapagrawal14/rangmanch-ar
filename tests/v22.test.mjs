@@ -202,6 +202,7 @@ console.log('new poses on stage');
   const perform = async (lead, name, ms = 1100, cats = {}) => page.evaluate(async ([lead, name, ms, cats]) => {
     const R = window.__rangmanch;
     if (R.cast.lead !== lead) { await R.setLead(lead); }
+    R.setFreeArms(false); // v2.3: these checks are about the drawn poses (Doodle Swapnil defaults to Free arms)
     R.state.mode = 'camera'; R.state.testAspect = 4 / 3;
     const p = R.packs[lead]; await R.loadExtraPoses(p); await p.posesLoading;
     const f = await window.__fixture(name, 1);
@@ -233,8 +234,8 @@ console.log('new poses on stage');
   await perform('bunty', 'none', 900);
   const blip = await page.evaluate(async () => {
     const R = window.__rangmanch, f = await window.__fixture('mouth', 1), seen = new Set();
-    R.raw.hands = f.hands; const t0 = performance.now();
-    while (performance.now() - t0 < 120) { await new Promise(r => requestAnimationFrame(r)); }
+    // a wall-clock 120 ms (a frame loop overshoots it on a loaded test machine)
+    R.raw.hands = f.hands; await new Promise(r => setTimeout(r, 120));
     R.raw.hands = [];
     const t1 = performance.now();
     while (performance.now() - t1 < 900) { seen.add(R.state.drawKey); await new Promise(r => requestAnimationFrame(r)); }
@@ -253,7 +254,7 @@ console.log('wave: two drawn frames that follow the hand');
   await page.waitForFunction(() => window.__rangmanch && window.__rangmanch.packs.swapnil, null, { timeout: 30000 });
   await page.exposeFunction('__fixture', (name, s) => fixture(name, s));
   const res = await page.evaluate(async () => {
-    const R = window.__rangmanch; await R.setLead('doodle-swapnil'); R.state.mode = 'camera'; R.state.testAspect = 4 / 3;
+    const R = window.__rangmanch; await R.setLead('doodle-swapnil'); R.setFreeArms(false); R.state.mode = 'camera'; R.state.testAspect = 4 / 3;
     const p = R.packs['doodle-swapnil']; await R.loadExtraPoses(p);
     const f = await window.__fixture('palm', 1); const base = f.hands[0];
     R.raw.pose = null; R.raw.face = { landmarks: f.face, cats: {} };
