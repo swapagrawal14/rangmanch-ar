@@ -12,6 +12,18 @@
 
 # Rangmanch AR 🎭
 
+## 🎬 Watch the 90-second pitch
+
+<p align="center">
+  <a href="https://swapagrawal14.github.io/rangmanch-ar/docs/video/rangmanch-ar-pitch.mp4">
+    <img src="docs/video/teaser.gif" alt="Rangmanch AR pitch teaser: a real hands-up match-cut into Doodle Swapnil, then a hand heart" width="720">
+  </a>
+  <br><strong><a href="https://swapagrawal14.github.io/rangmanch-ar/docs/video/rangmanch-ar-pitch.mp4">▶ Play the full pitch video (90 s, with sound)</a></strong>
+  · <a href="docs/video/rangmanch-ar-pitch.mp4">download MP4</a>
+</p>
+
+<sub>Every cartoon frame in the video is the real app running real on-device MediaPipe, driven by Mixkit stock clips. Music: "Raising Me Higher" by Ahjay Stelino (Mixkit Free License). Voice: Microsoft Edge neural TTS (en-IN-NeerjaNeural). Fonts: Poppins, Fraunces.</sub>
+
 **Every AI tool in this hackathon asks you to type. Rangmanch asks you to *act*.**
 
 Stand in front of your phone. You **become** the lead actor: the character
