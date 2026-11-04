@@ -144,7 +144,7 @@ await page.waitForFunction(() => window.__rangmanch && window.__rangmanch.packs.
 console.log('app');
 {
   const v = await page.evaluate(() => window.__rangmanch.version);
-  ok(v === '2.3.0', 'version 2.3.0', v);
+  ok(/^2\.(3|4)\.\d+$/.test(v), 'version 2.3.0 or later (free arms shipped in 2.3)', v);
   const r0 = await page.evaluate(async () => { const R = window.__rangmanch; await R.setLead('swapnil'); await new Promise(r => setTimeout(r, 400));
     return { draw: R.state.drawKey, toggle: !document.querySelector('#fa-wrap').hidden }; });
   ok(r0.draw !== 'free' && !r0.toggle, 'Swapnil keeps the pose system (no Free arms toggle)', r0);

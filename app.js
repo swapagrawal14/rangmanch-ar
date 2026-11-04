@@ -20,10 +20,10 @@
    and hands are drawn every frame from your pose + hand landmarks, so any
    gesture you make (both hands up, a heart, peace, a shrug…) is copied.
    Toggle "Free arms" off to get the pose drawings back. */
-import { classifyHandsFace, makeGestureMemory } from './gestures.js?v=2.3.0';
-import { HeadTracker, HeadWarpGL, warpPoint, OneEuro, swings } from './headwarp.js?v=2.3.0';
-import { synthFace, synthHand } from './synth.js?v=2.3.0';
-import { FreeArms } from './freearms.js?v=2.3.0';
+import { classifyHandsFace, makeGestureMemory } from './gestures.js?v=2.4.0';
+import { HeadTracker, HeadWarpGL, warpPoint, OneEuro, swings } from './headwarp.js?v=2.4.0';
+import { synthFace, synthHand } from './synth.js?v=2.4.0';
+import { FreeArms } from './freearms.js?v=2.4.0';
 
 const $ = s => document.querySelector(s);
 const stage = $('#stage'), ctx = stage.getContext('2d');
@@ -32,14 +32,14 @@ const btnCam = $('#btn-camera'), btnDemo = $('#btn-demo'), btnRec = $('#btn-reco
 const downloadA = $('#download'), btnShare = $('#btn-share'), btnReel = $('#btn-reel');
 const leadStrip = $('#lead-strip'), selLeft = $('#cast-left'), selRight = $('#cast-right');
 const selQuality = $('#quality'), captionInput = $('#caption-input'), chkCo = $('#coactors');
-const chkFA = $('#freearms'), faWrap = $('#fa-wrap');
+const chkFA = $('#freearms'), faWrap = $('#fa-wrap'), faNone = $('#fa-none');
 const statusModel = $('#status-model'), dotPose = $('#dot-pose'), dotHand = $('#dot-hand'), dotFace = $('#dot-face'), fpsEl = $('#fps');
 
 const MP_VER = '0.10.14';
 const WASM = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/wasm`;
 const MODEL = 'https://storage.googleapis.com/mediapipe-models';
 const PACKS_BASE = 'assets/packs/';
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 
 /* ---------- cast ---------- */
 const CAST = [
@@ -159,8 +159,9 @@ function buildCasting() {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'lead-pick'; b.dataset.id = id;
     b.setAttribute('aria-pressed', id === cast.lead ? 'true' : 'false');
-    b.innerHTML = `<img loading="lazy" alt="" src="${thumbSrc(id)}"><span>${name}</span>`;
-    b.addEventListener('click', () => setLead(id));
+    b.setAttribute('aria-label', name + (id === 'doodle-swapnil' ? ' (free arms)' : ''));
+    b.innerHTML = `<img loading="lazy" alt="" src="${thumbSrc(id)}"><span>${name}</span>${id === 'doodle-swapnil' ? '<em class="pick-tag" aria-hidden="true">free arms</em>' : ''}`;
+    b.addEventListener('click', () => { setLead(id); if (state.mode !== 'idle') setMsg('Now playing: ' + name); });
     leadStrip.appendChild(b);
   }
   for (const sel of [selLeft, selRight]) {
@@ -173,8 +174,11 @@ function buildCasting() {
 async function setLead(id) {
   cast.lead = id;
   for (const b of leadStrip.querySelectorAll('.lead-pick')) b.setAttribute('aria-pressed', b.dataset.id === id ? 'true' : 'false');
+  ui.leadChanged(id);
   state.poseName = 'base'; state.poseSide = null; state.candName = null; state.figInit = false;
-  try { const p = await ensurePack(id, true); if (state.mode !== 'idle') loadExtraPoses(p); if (cast.lead === id) faWrap.hidden = !p.fa; } catch (e) { setMsg('Could not load that character — check your connection.'); }
+  ui.packLoading(true);
+  try { const p = await ensurePack(id, true); if (state.mode !== 'idle') loadExtraPoses(p); if (cast.lead === id) { faWrap.hidden = !p.fa; faNone.hidden = !!p.fa; } } catch (e) { setMsg('Could not load that character — check your connection.'); }
+  finally { if (cast.lead === id) ui.packLoading(false); }
 }
 selLeft.addEventListener('change', async () => { cast.leftHand = selLeft.value; updateThumb('left', cast.leftHand); if (chkCo.checked) ensurePack(cast.leftHand).catch(() => {}); });
 selRight.addEventListener('change', async () => { cast.rightHand = selRight.value; updateThumb('right', cast.rightHand); if (chkCo.checked) ensurePack(cast.rightHand).catch(() => {}); });
@@ -294,19 +298,19 @@ function initModels(forceCpu) {
   if (modelsLoading && !forceCpu) return modelsLoading;
   modelsLoading = (async () => {
     const prog = { pose: 0, face: 0 };
-    const show = () => { statusModel.textContent = `Tracker: downloading ${Math.round((prog.pose + prog.face) / 2 * 100)}%`; };
-    statusModel.textContent = 'Tracker: downloading…';
+    const show = () => { const f = (prog.pose + prog.face) / 2; statusModel.textContent = `Tracker: downloading ${Math.round(f * 100)}%`; ui.loading(f, 'Downloading the tracker (once, about 9 MB)'); };
+    statusModel.textContent = 'Tracker: downloading…'; ui.loading(0, 'Downloading the tracker (once, about 9 MB)');
     const [mod] = await Promise.all([
       Tasks ? Promise.resolve(Tasks) : import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/vision_bundle.mjs`),
       fetchModel('pose', (g, t) => { prog.pose = g / t; show(); }),
       fetchModel('face', (g, t) => { prog.face = g / t; show(); })
     ]);
     Tasks = mod;
-    statusModel.textContent = 'Tracker: starting…';
+    statusModel.textContent = 'Tracker: starting…'; ui.loading(1, 'Starting the tracker…');
     if (!vision) vision = await Tasks.FilesetResolver.forVisionTasks(WASM);
     poseL = await makeTask(Tasks.PoseLandmarker, 'pose', null, forceCpu);
     faceL = await makeTask(Tasks.FaceLandmarker, 'face', { outputFaceBlendshapes: true }, forceCpu);
-    statusModel.textContent = cpuMode ? 'Tracker: live ✅ (CPU mode)' : 'Tracker: live ✅';
+    statusModel.textContent = !state.stream ? 'Tracker ready' : cpuMode ? 'Tracker: live ✅ (CPU mode)' : 'Tracker: live ✅'; ui.loading(null);
     if (chkCo.checked || forceCpu) ensureHands(forceCpu);
     else setTimeout(() => ensureHands(), 1500); // thumbs-up reads the hand model too
   })();
@@ -931,7 +935,8 @@ function loop(ts) {
   }
   if (state.recording) {
     const s = Math.floor((Date.now() - state.recStart) / 1000);
-    btnRec.textContent = `■ Stop · ${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+    const mmss = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+    if (s !== state.recShown) { state.recShown = s; setBtn(btnRec, '■', 'Stop · ' + mmss); recTime.textContent = 'REC ' + mmss; }
   }
   if (msgEl.textContent && performance.now() - state.msgAt > 7000) msgEl.style.opacity = '0';
   dotPose.classList.toggle('on', !!state.pose);
@@ -998,12 +1003,14 @@ btnCam.addEventListener('click', async () => {
     if (state.stream) state.stream.getTracks().forEach(t => t.stop());
     state.stream = r.stream; state.mode = 'camera'; raw.pose = null; raw.face = null; raw.hands = [];
     state.figInit = false;
-    btnCam.textContent = '📷 Camera on'; btnCam.hidden = true; btnDemo.textContent = '🪄 Demo'; btnRec.disabled = false;
+    setBtn(btnCam, '📷', 'Camera on'); btnCam.hidden = true; setBtn(btnDemo, '🪄', 'Demo'); btnRec.disabled = false; ui.hideCards();
     keepAwake(); goingLive(); state.headT.reset();
+    if (poseL) statusModel.textContent = cpuMode ? 'Tracker: live ✅ (CPU mode)' : 'Tracker: live ✅';
     if (!poseL) setMsg(mic ? 'Camera on. The tracker is warming up — a few seconds on first visit.' : 'Camera on (no microphone — your film will be silent). Tracker warming up…');
   } catch (e) {
     btnCam.disabled = false;
     setMsg(cameraErrorText(e));
+    ui.cameraError(e); if (!state.stream) statusModel.textContent = '📷 Camera off';
     return;
   }
   try {
@@ -1012,7 +1019,8 @@ btnCam.addEventListener('click', async () => {
   } catch (e) {
     statusModel.textContent = 'Tracker failed to load — tap Start Camera to retry';
     setMsg('The tracker could not download (' + (e.message || 'network') + '). Check your connection and tap Start Camera.');
-    btnCam.disabled = false; btnCam.hidden = false; btnCam.textContent = '📷 Retry tracker';
+    ui.loading(null); ui.trackerError(e);
+    btnCam.disabled = false; btnCam.hidden = false; setBtn(btnCam, '📷', 'Retry tracker', '');
     state.mode = 'idle'; btnRec.disabled = true;
     if (state.stream) { state.stream.getTracks().forEach(t => t.stop()); state.stream = null; }
     return;
@@ -1022,19 +1030,20 @@ btnDemo.addEventListener('click', () => {
   if (state.recording) return;
   if (state.mode === 'camera') return setMsg('Demo Mode is for when there is no camera — you are already live.');
   state.mode = state.mode === 'demo' ? 'idle' : 'demo';
-  btnDemo.textContent = state.mode === 'demo' ? '🪄 Stop demo' : '🪄 Demo';
+  setBtn(btnDemo, '🪄', state.mode === 'demo' ? 'Stop demo' : 'Demo'); ui.hideCards();
   btnRec.disabled = state.mode === 'idle';
   if (state.mode === 'demo') { goingLive(); state.headT.reset(); }
   if (state.mode === 'demo' && chkCo.checked) { ensurePack(cast.leftHand).catch(() => {}); ensurePack(cast.rightHand).catch(() => {}); }
   if (state.mode === 'idle') { raw.pose = null; raw.face = null; raw.hands = []; }
-  setMsg(state.mode === 'demo' ? 'Demo Mode: a virtual performer nods, shakes its head, waves, gasps, says namaste and thinks. The real thing needs your camera.' : '');
+  setMsg(state.mode === 'demo' ? 'Demo: a virtual performer shows the moves. Tap Start Camera to play it yourself.' : '');
+  ui.modeChanged();
 });
 selQuality.addEventListener('change', () => { state.quality = selQuality.value; });
 function setReel(on) {
   state.reel = on;
   stage.classList.toggle('reel', on);
   document.body.classList.toggle('reel-mode', on);
-  btnReel.textContent = on ? '🖥 16:9' : '📱 9:16';
+  setBtn(btnReel, on ? '🖥' : '📱', on ? '16:9' : '9:16');
   btnReel.setAttribute('aria-pressed', on ? 'true' : 'false');
 }
 btnReel.addEventListener('click', () => {
@@ -1110,7 +1119,7 @@ btnRec.addEventListener('click', () => {
     rec.ondataavailable = e => { if (e.data && e.data.size) state.chunks.push(e.data); };
     rec.onstop = async () => {
       const ms = Date.now() - state.recStart;
-      state.recording = false; btnRec.textContent = '⏺ Record again'; btnRec.classList.remove('recording');
+      state.recording = false; setBtn(btnRec, '⏺', 'Record again', 'Again'); document.body.classList.add('has-take'); btnRec.classList.remove('recording'); recBadge.hidden = true;
       canvasStream.getTracks().forEach(t => t.stop());
       const type = (rec.mimeType || mime || 'video/webm').split(';')[0];
       let blob = new Blob(state.chunks, { type });
@@ -1119,12 +1128,13 @@ btnRec.addEventListener('click', () => {
       if (state.recUrl) URL.revokeObjectURL(state.recUrl);
       state.recBlob = blob; state.recUrl = URL.createObjectURL(blob);
       downloadA.href = state.recUrl; downloadA.download = `rangmanch-${stamp()}.${ext}`;
+      setBtn(downloadA, '⬇', 'Save ' + ext.toUpperCase(), 'Save');
       downloadA.hidden = false; btnRetake.hidden = false;
       btnShare.hidden = !(navigator.canShare && navigator.canShare({ files: [new File([blob], downloadA.download, { type })] }));
       setMsg(`Scene recorded (${Math.round(ms / 1000)} s). Save the film, share it, or act a retake.`);
     };
     rec.start(1000); state.recorder = rec; state.recording = true; state.recStart = Date.now(); state.recMime = rec.mimeType || mime;
-    btnRec.classList.add('recording');
+    btnRec.classList.add('recording'); document.body.classList.remove('has-take'); state.recShown = -1; recBadge.hidden = false; recTime.textContent = 'REC 00:00';
     downloadA.hidden = true; btnRetake.hidden = true; btnShare.hidden = true;
     setMsg('Rolling! Lights, camera… act!');
   } catch (e) { setMsg('Recording failed: ' + e.message); }
@@ -1139,12 +1149,121 @@ btnRetake.addEventListener('click', () => {
   downloadA.hidden = true; btnRetake.hidden = true; btnShare.hidden = true; btnRec.click();
 });
 
+/* ---------- v2.4 UI: first-run card, error cards, loading, chips, settings ----------
+   All of it is DOM over the stage, so none of it is ever burned into a film
+   (the film is the canvas alone). No network, no storage beyond one
+   localStorage flag that remembers the intro was seen. */
+/* icon + label; an optional short label is what a crowded phone bar shows */
+function setBtn(el, icon, text, short) {
+  el.innerHTML = `<span aria-hidden="true">${icon}</span>&nbsp; ` + (short !== undefined ? `<span class="lbl">${text}</span><span class="lbl-s">${short}</span>` : text);
+  el.setAttribute('aria-label', text);
+}
+const recBadge = $('#rec-badge'), recTime = $('#rec-time');
+const ui = (() => {
+  const intro = $('#intro'), err = $('#stage-err'), errTitle = $('#err-title'), errBody = $('#err-body'), errRetry = $('#err-retry');
+  const load = $('#stage-load'), loadFill = $('#load-fill'), loadText = $('#load-text');
+  const chipCast = $('#chip-cast'), chipName = $('#chip-cast-name'), chipMoves = $('#chip-moves'), moves = $('#moves');
+  const btnSet = $('#btn-settings'), settings = $('#settings');
+  const KEY = 'rangmanch.introSeen';
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const nameOf = id => (CAST.find(c => c[0] === id) || [id, id])[1];
+  let retryAction = null, packTimer = 0;
+  const seen = () => { try { return localStorage.getItem(KEY) === '1'; } catch (e) { return false; } };
+  const markSeen = () => { try { localStorage.setItem(KEY, '1'); } catch (e) { /* private mode */ } };
+  const support = () => ({
+    camera: !!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+    wasm: typeof WebAssembly === 'object',
+    record: typeof MediaRecorder !== 'undefined' && !!stage.captureStream
+  });
+  function hideCards() { intro.hidden = true; err.hidden = true; document.body.classList.remove('card-open'); }
+  function showIntro() {
+    err.hidden = true; intro.hidden = false; document.body.classList.add('card-open'); setMsg('');
+    setMoves(false);
+  }
+  function showError(title, html, retryLabel, onRetry) {
+    intro.hidden = true; errTitle.textContent = title; errBody.innerHTML = html;
+    retryAction = onRetry || null; errRetry.hidden = !onRetry; if (retryLabel) errRetry.textContent = retryLabel;
+    err.hidden = false; document.body.classList.add('card-open'); setMoves(false);
+    setTimeout(() => (onRetry ? errRetry : $('#err-demo')).focus({ preventScroll: true }), 50);
+  }
+  const allowSteps = () => isIOS
+    ? '<ol><li>Tap <b>aA</b> in Safari\'s address bar → <b>Website Settings</b>.</li><li>Set <b>Camera</b> (and Microphone) to <b>Allow</b>.</li><li>Come back and tap <b>Try again</b>.</li></ol>'
+    : '<ol><li>Tap the <b>lock</b> (or <b>info</b>) icon left of the address.</li><li>Open <b>Permissions</b> and allow <b>Camera</b> (and Microphone).</li><li>Tap <b>Try again</b> (or reload the page).</li></ol>';
+  function cameraError(e) {
+    const n = e && e.name, s = support();
+    const retry = () => { hideCards(); btnCam.click(); };
+    if (!s.camera || n === 'NotSupportedError') return showError('This browser can\'t open the camera',
+      '<p>Rangmanch needs a browser with camera access over https. Open this page in <b>Chrome on Android</b> or <b>Safari on iPhone</b> (not inside an in-app browser like Instagram).</p><p>You can still watch the demo here.</p>', null, null);
+    if (n === 'NotAllowedError' || n === 'SecurityError') return showError('Camera permission is off',
+      '<p>The camera is only used to read your movements, on this phone. Nothing is recorded until you press Record, and nothing is uploaded.</p>' + allowSteps(), 'Try again', retry);
+    if (n === 'NotFoundError' || n === 'OverconstrainedError') return showError('No camera found',
+      '<p>This device has no front camera we can use. The demo still works, and so does recording it.</p>', 'Try again', retry);
+    if (n === 'NotReadableError' || n === 'AbortError') return showError('The camera is busy',
+      '<p>Another app or tab is using the camera. Close it (video calls, camera apps) and try again.</p>', 'Try again', retry);
+    showError('The camera didn\'t start', `<p>${cameraErrorText(e)}</p>`, 'Try again', retry);
+  }
+  function trackerError(e) {
+    showError('The tracker didn\'t download', `<p>The tracking models (about 9 MB, downloaded once) couldn't load: ${(e && e.message) || 'network error'}.</p><p>Check your connection and try again. The demo works offline.</p>`, 'Try again', () => { hideCards(); btnCam.click(); });
+  }
+  function loading(frac, text) {
+    if (frac === null) { load.hidden = true; return; }
+    load.hidden = false; loadFill.style.width = Math.round(Math.max(0.04, Math.min(1, frac)) * 100) + '%';
+    if (text) loadText.textContent = frac < 1 ? `${text} · ${Math.round(frac * 100)}%` : text;
+  }
+  function packLoading(on) {
+    clearTimeout(packTimer);
+    if (on) packTimer = setTimeout(() => { if (load.hidden) { loading(0.5, 'Bringing on ' + nameOf(cast.lead) + '…'); load.dataset.pack = '1'; } }, 350);
+    else if (load.dataset.pack) { delete load.dataset.pack; loading(null); }
+  }
+  function setMoves(open) { moves.hidden = !open; chipMoves.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+  function leadChanged(id) {
+    chipName.textContent = nameOf(id);
+    stage.setAttribute('aria-label', 'The stage — you are playing ' + nameOf(id));
+  }
+  function modeChanged() { document.body.classList.toggle('live', state.mode !== 'idle'); }
+  function init() {
+    $('#intro-camera').addEventListener('click', () => { markSeen(); hideCards(); btnCam.click(); });
+    $('#intro-demo').addEventListener('click', () => { markSeen(); hideCards(); if (state.mode !== 'demo') btnDemo.click(); });
+    $('#intro-close').addEventListener('click', () => { markSeen(); hideCards(); setMsg('Pick a character below, then tap Start Camera.'); });
+    $('#err-demo').addEventListener('click', () => { hideCards(); if (state.mode === 'idle') btnDemo.click(); });
+    $('#err-close').addEventListener('click', hideCards);
+    errRetry.addEventListener('click', () => retryAction && retryAction());
+    $('#btn-help').addEventListener('click', showIntro);
+    $('#btn-intro').addEventListener('click', () => { toggleSettings(false); showIntro(); stage.scrollIntoView({ block: 'center', behavior: 'smooth' }); });
+    // the console buttons work with the intro up; using them counts as having seen it
+    btnCam.addEventListener('click', () => { markSeen(); intro.hidden = true; }, true);
+    btnDemo.addEventListener('click', () => { markSeen(); intro.hidden = true; }, true);
+    chipCast.addEventListener('click', () => {
+      const sel = leadStrip.querySelector('[aria-pressed="true"]') || leadStrip.firstElementChild;
+      $('#casting').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (sel) { sel.scrollIntoView({ inline: 'center', block: 'nearest' }); setTimeout(() => sel.focus({ preventScroll: true }), 400); }
+    });
+    chipMoves.addEventListener('click', () => setMoves(moves.hidden));
+    moves.addEventListener('click', () => setMoves(false));
+    btnSet.addEventListener('click', () => toggleSettings(settings.hidden));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') { setMoves(false); if (!err.hidden || !intro.hidden) hideCards(); } });
+    faNone.hidden = !faWrap.hidden;
+    const s = support();
+    if (!s.camera || !s.wasm) {
+      showError(!s.camera ? 'This browser can\'t open the camera' : 'This browser can\'t run the tracker',
+        '<p>Open this page in <b>Chrome on Android</b> or <b>Safari on iPhone (iOS 15+)</b>, outside in-app browsers like Instagram or WhatsApp.</p><p>The demo still plays here.</p>', null, null);
+      btnCam.disabled = !s.camera;
+    } else if (!seen()) showIntro();
+    else setMsg('Tap Start Camera and stand in front of your phone — or try the Demo.');
+    if (!s.record) btnRec.title = 'This browser cannot record video';
+    setBtn(btnCam, '📷', 'Start Camera', ''); setBtn(btnShare, '↗', 'Share', 'Share');
+  }
+  function toggleSettings(open) { settings.hidden = !open; btnSet.setAttribute('aria-expanded', open ? 'true' : 'false'); btnSet.classList.toggle('on', open); if (open) settings.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  return { init, showIntro, showError, hideCards, cameraError, trackerError, loading, packLoading, leadChanged, modeChanged, support, setMoves, toggleSettings };
+})();
+
 /* Debug/testing handle — lets the test harness drive synthetic performers. */
 window.__rangmanch = { version: VERSION, state, raw, cast, packs, ensurePack, classifyGesture, packGeom, stage, setLead, setReel, fixWebmDuration, pickRecType, MAP, toPx,
-  loadExtraPoses, resolvePose, warpPoint, freeArmsOn, setFreeArms: on => { state.freeArms = !!on; chkFA.checked = !!on; state.compSig = null; }, synthFace, synthHand, ALL_POSES, EXTRA_KEYS, FALLBACK, get headGL() { return headGL; } };
+  loadExtraPoses, resolvePose, warpPoint, freeArmsOn, setFreeArms: on => { state.freeArms = !!on; chkFA.checked = !!on; state.compSig = null; }, synthFace, synthHand, ALL_POSES, EXTRA_KEYS, FALLBACK, ui, get headGL() { return headGL; } };
 
 // phones held upright get the vertical 9:16 stage by default
 setReel(window.matchMedia('(orientation: portrait)').matches && window.innerWidth < 900);
 buildCasting();
 setLead(cast.lead);
+ui.init();
 requestAnimationFrame(loop);

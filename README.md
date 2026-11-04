@@ -118,7 +118,34 @@ hands alternate frames (they read perfectly at half rate), per-pack setup is a
 single ~20 ms geometry scan, and if the frame rate
 sags the stage sheds load automatically and tells you on the ticket.
 
+## Using it (v2.4)
+
+- **First open** shows a playbill card on the stage: what the app does in three
+  steps, why it asks for the camera and mic, and that **nothing leaves your
+  phone**. Start the camera or watch the demo from there; it shows once
+  (the **?** in the header brings it back).
+- **Pick a character** from the cast strip, or tap the **🎭 name** chip on the
+  stage to jump to it. The selected lead is ticked; Doodle Swapnil is tagged
+  *free arms*.
+- **✋ Moves** on the stage lists the gestures the character copies.
+- **Record → Stop → Save / Share**: a REC badge with a timer sits on the stage
+  while you film (it is page UI, never in the film); after a take the bar
+  becomes *Again · Save MP4 · Share*.
+- **⚙ Settings** holds Free arms (with what it does), Quality and the caption.
+- **When something is wrong** the stage says so plainly, with a fix: camera
+  permission off (how to allow it on Android Chrome and iPhone Safari), no
+  camera, camera busy, tracker download failed (retry), or a browser that
+  cannot open the camera at all (the demo still plays). The tracker download
+  and slow character loads show a progress card.
+
 ## Testing
+
+`node tests/v24.test.mjs` covers the v2.4 UI (39 checks at 390×844): the
+first-run card (content, shown once, ? brings it back, console usable under
+it), settings panel, Moves hint, character chip and stage label, record → stop
+→ save with the REC badge and a one-row bar after a take, the permission-off
+and unsupported-browser cards, tap targets ≥ 44 px, accessible names on every
+visible control, and no horizontal overflow.
 
 `node tests/v23.test.mjs` covers v2.3 Free arms (27 checks): the 2-bone IK
 keeps limb lengths for any target, both hands up, the mirror, a heart stays a
@@ -227,6 +254,7 @@ README visuals are generated from the packs' real art by
 - [x] v2.1 — **Phone first**: the stage fills a portrait phone (9:16 by default), camera on first tap, 29 MB → 0.7 MB first load, gestures with either arm (selfie-safe) and mirrored drawings, pose swaps without size jumps, face anchors for all 16 characters, MP4 recording + share sheet, WebM duration fix
 - [x] v2.2 — **Hands and head**: the head follows yours (tilt, turn, nod, shake), hand-at-face and two-hand gestures (hand on mouth, shh, thinking, facepalm, salute, cover, hands on head, namaste, clap, fist) each performed as its own drawing, a wave that really waves (two frames)
 - [x] v2.3 — **Free arms** (Doodle Swapnil first): an armless torso drawing (`tools/make-armless.py`) + procedural cartoon arms and hands from your pose and hand landmarks (`freearms.js`), so any gesture is copied, not snapped to a drawn pose
+- [x] v2.4 — **Polish**: first-run card (what it does, camera explanation, "nothing leaves your phone"), character chip + ticked picker, ✋ Moves hint, REC badge and a tidy Record → Save / Share bar, ⚙ Settings panel (Free arms, Quality, Caption), plain-language error cards (permission off, no camera, busy camera, tracker download, unsupported browser), tracker progress card, 44 px tap targets, screen-reader labels, focus rings, reduced-motion support
 - [ ] Free arms rigs for the other 15 characters
 - [ ] Per-character voice pitch for takes, scene list / multi-take editor
 - [ ] Vendored models for a fully offline build

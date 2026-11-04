@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,900&family=Space+Grotesk:wght@400;500;700&family=Caveat:wght@600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=2.3.0">
+<link rel="stylesheet" href="styles.css?v=2.4.0">
 </head>
 <body>
 
@@ -24,7 +24,7 @@
       <p class="hand-note">one camera, an entire film company ✦</p>
     </div>
     <div class="status-block">
-      <div class="ticket" id="status-model">Tracker loads when the camera starts</div>
+      <div class="ticket" id="status-model" role="status" aria-live="polite">🔒 On-device</div>
       <div class="trackers">
         <span class="t-item"><span class="dot" id="dot-pose"></span>Body</span>
         <span class="t-item"><span class="dot" id="dot-hand"></span>Hands</span>
@@ -32,6 +32,7 @@
         <span class="fps" id="fps"></span>
       </div>
     </div>
+    <button id="btn-help" class="help-btn" type="button" aria-label="How it works" title="How it works">?</button>
   </div>
   <div class="bulbs" aria-hidden="true"></div>
 </header>
@@ -41,43 +42,101 @@
     <div class="curtain-top" aria-hidden="true"></div>
     <div class="curtain-side left" aria-hidden="true"></div>
     <div class="curtain-side right" aria-hidden="true"></div>
-    <canvas id="stage" width="1280" height="720" aria-label="The stage"></canvas>
+    <canvas id="stage" width="1280" height="720" role="img" aria-label="The stage"></canvas>
     <video id="cam" playsinline webkit-playsinline muted autoplay aria-hidden="true"></video>
-    <div class="stage-msg" id="stage-msg">Tap Start Camera and stand in front of your phone — or try Demo with no camera at all.</div>
+    <div class="stage-chips">
+      <button id="chip-cast" class="chip" type="button" aria-label="Change character">🎭 <span id="chip-cast-name">Swapnil</span> <span aria-hidden="true">▾</span></button>
+      <button id="chip-moves" class="chip" type="button" aria-expanded="false" aria-controls="moves">✋ Moves</button>
+    </div>
+    <div id="rec-badge" class="rec-badge" hidden><span class="rec-dot" aria-hidden="true"></span><span id="rec-time">REC 00:00</span></div>
+    <div id="moves" class="moves" hidden role="region" aria-label="Moves the character copies">
+      <div class="moves-title">Try these — the character copies you</div>
+      <ul>
+        <li><span aria-hidden="true">👋</span> Wave</li><li><span aria-hidden="true">👉</span> Point</li>
+        <li><span aria-hidden="true">🙌</span> Arms open</li><li><span aria-hidden="true">👍</span> Thumbs up</li>
+        <li><span aria-hidden="true">🤭</span> Hand on mouth</li><li><span aria-hidden="true">🤫</span> Finger to lips</li>
+        <li><span aria-hidden="true">🙏</span> Namaste</li><li><span aria-hidden="true">🤦</span> Palm to forehead</li>
+        <li><span aria-hidden="true">🤔</span> Hand on chin</li><li><span aria-hidden="true">👏</span> Clap</li>
+        <li><span aria-hidden="true">🫡</span> Salute</li><li><span aria-hidden="true">🙆</span> Hands on head</li>
+        <li><span aria-hidden="true">😮</span> Open your mouth</li><li><span aria-hidden="true">↔️</span> Nod, shake, tilt</li>
+      </ul>
+      <div class="moves-foot">Step back so your shoulders show for arm moves. Either hand works.</div>
+    </div>
+    <div id="stage-load" class="stage-load" hidden aria-hidden="true"><div class="load-bar"><i id="load-fill"></i></div><span id="load-text">Loading the tracker…</span></div>
+    <div class="stage-msg" id="stage-msg" role="status" aria-live="polite"></div>
+    <div id="intro" class="stage-card" role="dialog" aria-modal="false" aria-labelledby="intro-title" hidden>
+      <div class="card-kicker">Tonight's show stars you</div>
+      <h2 id="intro-title">Act it. The cartoon copies you.</h2>
+      <ol class="intro-steps">
+        <li><b>Pick a character</b> — 16 in the cast below.</li>
+        <li><b>Allow the camera</b> and mic — it reads your face, hands and body so the character moves with you, in your voice.</li>
+        <li><b>Press Record</b>, then save or share the MP4.</li>
+      </ol>
+      <p class="card-privacy">🔒 <b>Nothing leaves your phone.</b> Tracking runs on this device, no video is uploaded, and you are never shown — only the character.</p>
+      <div class="card-actions">
+        <button id="intro-camera" class="btn btn-gold" type="button">📷 Start camera</button>
+        <button id="intro-demo" class="btn btn-ghost" type="button">🪄 Watch demo</button>
+      </div>
+      <button id="intro-close" class="card-link" type="button">Look around first</button>
+    </div>
+    <div id="stage-err" class="stage-card error" role="alertdialog" aria-labelledby="err-title" aria-describedby="err-body" hidden>
+      <h2 id="err-title">Camera unavailable</h2>
+      <div id="err-body" class="err-body"></div>
+      <div class="card-actions">
+        <button id="err-retry" class="btn btn-gold" type="button">Try again</button>
+        <button id="err-demo" class="btn btn-ghost" type="button">🪄 Watch demo</button>
+      </div>
+      <button id="err-close" class="card-link" type="button">Close</button>
+    </div>
     <div class="stage-board" aria-hidden="true">★ Tonight's show: You, playing every character ★</div>
   </section>
 
   <section class="console" aria-label="Director console">
     <div class="console-row primary">
-      <button id="btn-camera" class="btn btn-gold">📷&nbsp; Start Camera</button>
-      <button id="btn-record" class="btn btn-record" disabled>⏺&nbsp; Record</button>
-      <a id="download" class="btn btn-download" hidden download="rangmanch-scene.mp4">⬇&nbsp; Save film</a>
-      <button id="btn-share" class="btn btn-download" hidden>↗&nbsp; Share</button>
-      <button id="btn-retake" class="btn btn-ghost" hidden>↩&nbsp; Retake</button>
+      <button id="btn-camera" class="btn btn-gold" type="button"><span aria-hidden="true">📷</span>&nbsp; Start Camera</button>
+      <button id="btn-record" class="btn btn-record" type="button" disabled title="Start the camera or the demo first"><span aria-hidden="true">⏺</span>&nbsp; Record</button>
+      <a id="download" class="btn btn-download" hidden download="rangmanch-scene.mp4"><span aria-hidden="true">⬇</span>&nbsp; Save film</a>
+      <button id="btn-share" class="btn btn-download" type="button" hidden><span aria-hidden="true">↗</span>&nbsp; Share</button>
+      <button id="btn-retake" class="btn btn-ghost" type="button" hidden><span aria-hidden="true">↩</span>&nbsp; Retake</button>
     </div>
   </section>
 
   <section class="console-tools" aria-label="Stage options">
     <div class="console-row tools">
-      <button id="btn-demo" class="btn btn-ghost small">🪄&nbsp; Demo</button>
-      <button id="btn-reel" class="btn btn-ghost small" aria-pressed="false">📱&nbsp; 9:16</button>
-      <label class="tool check"><input type="checkbox" id="coactors"> Co-actors</label>
-      <label class="tool check" id="fa-wrap" hidden title="Arms and hands copy yours exactly (characters with an arm rig)"><input type="checkbox" id="freearms" checked> Free arms</label>
-      <label class="tool">Quality
+      <button id="btn-demo" class="btn btn-ghost small" type="button"><span aria-hidden="true">🪄</span>&nbsp; Demo</button>
+      <button id="btn-reel" class="btn btn-ghost small" type="button" aria-pressed="false" aria-label="Frame shape"><span aria-hidden="true">📱</span>&nbsp; 9:16</button>
+      <label class="tool check chip-check"><input type="checkbox" id="coactors"> <span>Co-actors</span></label>
+      <button id="btn-settings" class="btn btn-ghost small icon" type="button" aria-expanded="false" aria-controls="settings" aria-label="Settings">⚙</button>
+    </div>
+    <div id="settings" class="settings" hidden>
+      <div class="set-row" id="fa-wrap" hidden>
+        <label class="set-label" for="freearms"><input type="checkbox" id="freearms" checked> <b>Free arms</b></label>
+        <p class="set-help">The character's arms and hands copy yours exactly. Turn off to use its drawn poses instead.</p>
+      </div>
+      <div class="set-row" id="fa-none"><b>Free arms</b><p class="set-help">Available for Doodle Swapnil — the others act out drawn poses.</p></div>
+      <div class="set-row">
+        <label class="set-label" for="quality"><b>Quality</b></label>
         <select id="quality">
-          <option value="high" selected>High</option>
+          <option value="high" selected>High — smoothest tracking</option>
           <option value="balanced">Balanced</option>
-          <option value="performance">Light</option>
+          <option value="performance">Light — older phones</option>
         </select>
-      </label>
-      <label class="tool grow">Caption (burned into the film)
+        <p class="set-help">Drops on its own if your phone gets slow.</p>
+      </div>
+      <div class="set-row">
+        <label class="set-label" for="caption-input"><b>Caption</b> <span class="set-help-inline">burned into the film</span></label>
         <input id="caption-input" type="text" maxlength="90" placeholder="e.g. Germ: Defeated by a toothbrush again!">
-      </label>
+      </div>
+      <div class="set-row set-foot">
+        <span>🔒 Nothing leaves your phone.</span>
+        <button id="btn-intro" class="card-link" type="button">How it works</button>
+      </div>
     </div>
   </section>
 
-  <section class="casting" aria-label="Casting">
+  <section class="casting" id="casting" aria-label="Casting">
     <h2><span class="h2-rule"></span>Who do you become?<span class="h2-rule"></span></h2>
+    <p class="cast-hint">Tap a character to play it. Swipe for all 16 →</p>
     <div class="lead-strip" id="lead-strip" role="group" aria-label="Lead character"></div>
     <div class="cast-grid">
       <article class="cast-card">
@@ -110,12 +169,12 @@
 </main>
 
 <footer>
-  <span>Rangmanch AR · v2.3.0</span><span class="sep">✦</span>
+  <span>Rangmanch AR · v2.4.0</span><span class="sep">✦</span>
   <span>Characters: Rigpop Forge packs</span><span class="sep">✦</span>
   <span>Tracking: MediaPipe, on-device</span><span class="sep">✦</span>
   <span>Build Your First AI App 2026</span>
 </footer>
 
-<script type="module" src="app.js?v=2.3.0"></script>
+<script type="module" src="app.js?v=2.4.0"></script>
 </body>
 </html>
